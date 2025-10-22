@@ -27,3 +27,4 @@ nltk
 pillow
 tenacity                   
 httpx                     
+google-cloud-secret-manager
