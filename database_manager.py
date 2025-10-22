@@ -3,6 +3,9 @@ import asyncio
 import logging
 from typing import Optional, List, Dict, Any
 import os
+import os
+from config import Config
+from google.cloud import secretmanager
  
 logger = logging.getLogger(__name__)
  
@@ -12,29 +15,36 @@ class DatabaseManager:
         self.engine = None
         self._initialized = False
         self._lock = asyncio.Lock()
+
     async def initialize(self):
         """Initialize database engine"""
-        from config import Config
         async with self._lock:
             if self._initialized:
                 return
             try:
+                # The DB_INSTANCE and DB_PASSWORD environment variables are
+                # now populated by Secret Manager through the Cloud Build step
+                db_instance = os.getenv('DB_INSTANCE')
+                db_password = os.getenv('DB_PASSWORD')
+
                 if Config.USE_IAM_AUTH:
+                    # IAM authentication, use the instance name from the environment
                     self.engine = await PostgresEngine.afrom_instance(
                         project_id=Config.PROJECT_ID,
                         region=Config.DB_REGION,
-                        instance=Config.DB_INSTANCE,
+                        instance=db_instance,
                         database=Config.DB_NAME,
                         quota_project=Config.PROJECT_ID,
                     )
                 else:
+                    # Fallback to password authentication
                     self.engine = await PostgresEngine.afrom_instance(
                         project_id=Config.PROJECT_ID,
                         region=Config.DB_REGION,
-                        instance=Config.DB_INSTANCE,
+                        instance=db_instance,
                         database=Config.DB_NAME,
                         user=os.getenv('DB_USER', 'postgres'),
-                        password=os.getenv('DB_PASSWORD'),
+                        password=db_password,
                     )
                 self._initialized = True
                 logger.info("Database connection initialized")
