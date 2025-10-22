@@ -1,6 +1,5 @@
 steps:
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    dir: 'document-ingestion-pipeline'
     entrypoint: 'gcloud'
     args:
       - 'functions'
