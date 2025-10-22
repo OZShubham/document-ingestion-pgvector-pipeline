@@ -1,0 +1,36 @@
+steps:
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  dir: 'document-ingestion-pipeline' # Change to the directory containing your function
+  entrypoint: 'gcloud'
+  args:
+    - 'functions'
+    - 'deploy'
+    - 'document-ingestion-pipeline'  # You can change this name
+    - '--gen2'
+    - '--runtime=python311'
+    - '--project=$PROJECT_ID'
+    - '--region=$_REGION'
+    - '--source=.'
+    - '--entry-point=process_document_upload'
+    - '--trigger-event-filters=type=google.cloud.storage.object.v1.finalized'
+    - '--trigger-event-filters=bucket=$_GCS_BUCKET_NAME'
+    - '--service-account=$_SERVICE_ACCOUNT'
+    - '--set-env-vars'
+    - >-
+      GCP_PROJECT_ID=$PROJECT_ID,
+      GCP_REGION=$_REGION,
+      DB_INSTANCE=$_DB_INSTANCE,
+      DB_NAME=vectordb,
+      GCS_BUCKET_NAME=$_GCS_BUCKET_NAME,
+      PUBSUB_TOPIC=document-processing,
+      USE_IAM_AUTH=true
+ 
+# You will define these substitution variables in your Cloud Build Trigger settings
+substitutions:
+  _REGION: 'us-central1'
+  _GCS_BUCKET_NAME: 'vectordb-ingestion-storage-us-central1' # TODO: Replace with your bucket name
+  _SERVICE_ACCOUNT: 'hcllmsvcacct@gbg-project-gravity.iam.gserviceaccount.com' # TODO: Replace with your function's service account
+  _DB_INSTANCE: 'gbg-project-gravity:us-central1:vectordb-instance' # TODO: Replace with your Cloud SQL instance connection name
+ 
+options:
+  logging: CLOUD_LOGGING_ONLY

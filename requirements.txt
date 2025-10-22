@@ -1,0 +1,29 @@
+# Add these new dependencies
+functions-framework
+google-cloud-storage
+google-cloud-pubsub
+google-genai               
+
+# Database
+langchain
+langchain-google-cloud-sql-pg
+langchain-google-vertexai
+langchain-community
+langchain-experimental
+psycopg2-binary
+pg8000
+
+# Document Processing
+pypdf                      
+pymupdf
+python-docx
+openpyxl
+
+# Text Processing
+tiktoken
+nltk
+
+# Utilities
+pillow
+tenacity                   
+httpx                     
