@@ -40,7 +40,7 @@ steps:
         source /workspace/db_config.env
         
         echo "🚀 Deploying to Cloud Run..."
-        echo "   Service: documind-api"
+        echo "   Service: ${_SERVICE_NAME}"
         echo "   DB Connection: $$DB_INSTANCE"
         
         gcloud run deploy "${_SERVICE_NAME}" \
@@ -64,6 +64,3 @@ steps:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-
-substitutions:
-  _SERVICE_NAME: "documind-api"
