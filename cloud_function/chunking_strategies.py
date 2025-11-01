@@ -21,7 +21,7 @@ class RecursiveChunker(ChunkingStrategy):
         self.overlap = overlap
    
     async def chunk(self, text: str, metadata: Dict = None) -> List[Document]:
-        from langchain.text_splitter import RecursiveCharacterTextSplitter
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
        
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
@@ -48,13 +48,28 @@ class SemanticChunker(ChunkingStrategy):
     """Semantic chunking based on sentence embeddings"""
    
     def __init__(self):
-        from langchain_experimental.text_splitter import SemanticChunker as LCSemanticChunker
+        try:
+            # FIXED: Try new import location first (LangChain >= 0.1.0)
+            from langchain_text_splitters import SemanticChunker as LCSemanticChunker
+            logger.info("✅ Using SemanticChunker from langchain_text_splitters")
+        except ImportError:
+            try:
+                # Fallback to old location
+                from langchain_experimental.text_splitter import SemanticChunker as LCSemanticChunker
+                logger.info("✅ Using SemanticChunker from langchain_experimental")
+            except ImportError:
+                logger.warning("⚠️ SemanticChunker not available, will use RecursiveChunker as fallback")
+                raise ImportError("SemanticChunker not available in langchain packages")
+        
         from langchain_google_vertexai import VertexAIEmbeddings
         from config import Config
+        
+        # FIXED: Create Config instance
+        config = Config()
        
         self.embeddings = VertexAIEmbeddings(
-            model_name=Config.EMBEDDING_MODEL,
-            project=Config.PROJECT_ID
+            model_name=config.EMBEDDING_MODEL,
+            project=config.PROJECT_ID
         )
         self.splitter = LCSemanticChunker(
             embeddings=self.embeddings,
@@ -147,14 +162,31 @@ class SentenceChunker(ChunkingStrategy):
         ]
  
 class ChunkingFactory:
-    """Factory for chunking strategies"""
+    """Factory for chunking strategies with lazy initialization"""
    
     def __init__(self):
+        # Initialize only basic strategies immediately
         self.strategies = {
             'recursive': RecursiveChunker(),
-            'semantic': SemanticChunker(),
             'sentence': SentenceChunker(),
         }
+        
+        # Semantic chunker initialized on demand (might fail)
+        self._semantic_initialized = False
+   
+    def _init_semantic_chunker(self):
+        """Lazy initialization of semantic chunker"""
+        if self._semantic_initialized:
+            return
+        
+        try:
+            self.strategies['semantic'] = SemanticChunker()
+            self._semantic_initialized = True
+            logger.info("✅ Semantic chunker initialized")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not initialize semantic chunker: {e}")
+            logger.info("Will use recursive chunker as fallback for semantic requests")
+            self._semantic_initialized = True  # Don't try again
    
     async def chunk_text(
         self,
@@ -163,6 +195,10 @@ class ChunkingFactory:
         metadata: Dict = None
     ) -> List[Document]:
         """Chunk text using specified method"""
+        
+        # Try to initialize semantic chunker if requested
+        if method == 'semantic' and not self._semantic_initialized:
+            self._init_semantic_chunker()
        
         strategy = self.strategies.get(method, self.strategies['recursive'])
        
@@ -171,4 +207,3 @@ class ChunkingFactory:
         except Exception as e:
             logger.warning(f"Chunking with {method} failed: {e}, falling back to recursive")
             return await self.strategies['recursive'].chunk(text, metadata)
- 

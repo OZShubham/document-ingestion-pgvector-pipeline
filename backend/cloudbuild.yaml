@@ -1,0 +1,69 @@
+steps:
+  # Step 1: Build the Docker image
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "europe-west1-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/document-ingestion-pgvector-pipeline:$COMMIT_SHA"
+      - "-t"
+      - "europe-west1-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/document-ingestion-pgvector-pipeline:latest"
+      - "./backend/"
+    id: "build-image"
+
+  # Step 2: Push to Artifact Registry
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "--all-tags"
+      - "europe-west1-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/document-ingestion-pgvector-pipeline"
+    id: "push-image"
+    waitFor: ["build-image"]
+
+  # Step 3: Get DB connection string from Secret Manager
+  - name: "gcr.io/cloud-builders/gcloud"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        DB_CONN=$(gcloud secrets versions access latest --secret=DB_INSTANCE)
+        echo "DB_INSTANCE=$DB_CONN" > /workspace/db_config.env
+        echo "✅ Retrieved DB_INSTANCE from Secret Manager"
+    id: "get-db-instance"
+    waitFor: ["push-image"]
+
+  # Step 4: Deploy to Cloud Run
+  - name: "gcr.io/cloud-builders/gcloud"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        source /workspace/db_config.env
+        
+        echo "🚀 Deploying to Cloud Run..."
+        echo "   Service: documind-api"
+        echo "   DB Connection: $DB_INSTANCE"
+        
+        gcloud run deploy "${_SERVICE_NAME}", \
+          --image europe-west1-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/document-ingestion-pgvector-pipeline:$COMMIT_SHA \
+          --region europe-west1 \
+          --platform managed \
+          --allow-unauthenticated \
+          --memory 2Gi \
+          --cpu 2 \
+          --timeout 600 \
+          --concurrency 80 \
+          --min-instances 0 \
+          --max-instances 10 \
+          --add-cloudsql-instances "$DB_INSTANCE" \
+          --set-env-vars "GCP_PROJECT_ID=${PROJECT_ID},GCP_REGION=us-central1,DB_REGION=us-central1,DB_NAME=postgres,DB_USER=postgres,EMBEDDING_MODEL=text-embedding-005,GEMINI_MODEL=gemini-2.0-flash,VECTOR_TABLE_NAME=document_vectors,GCS_BUCKET_NAME=ingestion-docs,PUBSUB_TOPIC=document-processing" \
+          --update-secrets "DB_PASSWORD=DB_PASSWORD:latest,DB_INSTANCE=DB_INSTANCE:latest" \
+         
+        
+        echo "✅ Deployment complete!"
+    id: "deploy-service"
+    waitFor: ["get-db-instance"]
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+

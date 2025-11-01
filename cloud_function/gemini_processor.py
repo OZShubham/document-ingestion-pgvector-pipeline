@@ -3,6 +3,7 @@ from google.genai.types import GenerateContentConfig, Part
 from typing import Dict, Any, Optional
 import logging
 import io
+import asyncio  # FIXED: Add missing import
 
 logger = logging.getLogger(__name__)
 
@@ -21,13 +22,18 @@ class EnhancedGeminiProcessor:
     MAX_RESOLUTION = 3072
     
     def __init__(self):
+        from google import genai
         from config import Config
+        
+        # FIXED: Create Config instance
+        config = Config()
+        
         self.client = genai.Client(
             vertexai=True,
-            project=Config.PROJECT_ID,
-            location=Config.REGION
+            project=config.PROJECT_ID,
+            location=config.REGION
         )
-        self.config = Config
+        self.config = config
     
     def supports(self, mime_type: str) -> bool:
         """Check if file type is supported by Gemini"""
@@ -121,6 +127,9 @@ class EnhancedGeminiProcessor:
         
         try:
             logger.info(f"Processing {filename} inline ({len(file_bytes)} bytes)")
+            
+            # FIXED: Ensure we're using the event loop properly
+            loop = asyncio.get_event_loop()
             
             response = await self.client.aio.models.generate_content(
                 model=self.config.GEMINI_MODEL,
@@ -324,6 +333,11 @@ class SmartDocumentProcessorFactory:
     """
     
     def __init__(self):
+        from config import Config
+        
+        # FIXED: Create an instance of Config to access field defaults
+        self.config = Config()
+        
         self.gemini_processor = EnhancedGeminiProcessor()
         
         # Import other processors
@@ -354,17 +368,17 @@ class SmartDocumentProcessorFactory:
         """
         Process document with smart fallback strategies
         """
-        from config import Config
         from document_processors import ProcessedDocument
         
         file_size_mb = len(file_bytes) / (1024 * 1024)
         
         logger.info(f"Processing {filename} ({file_size_mb:.1f}MB, {mime_type})")
         
-        # Determine available methods
-        available_methods = Config.PROCESSING_METHODS.get(mime_type, [])
+        # FIXED: Access PROCESSING_METHODS from config instance
+        available_methods = self.config.PROCESSING_METHODS.get(mime_type, [])
         
         if not available_methods:
+            logger.warning(f"No processing methods configured for {mime_type}")
             return ProcessedDocument(
                 text="",
                 metadata={},
@@ -449,4 +463,3 @@ class SmartDocumentProcessorFactory:
             metadata={'file_size': len(file_bytes), 'mime_type': mime_type},
             error=f"All processing methods failed. Last error: {last_error}"
         )
-

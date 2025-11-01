@@ -1,0 +1,26 @@
+# FastAPI Backend Requirements
+fastapi
+uvicorn[standard]
+pydantic[email]
+python-multipart
+
+# Google Cloud
+google-cloud-storage
+google-cloud-secret-manager
+google-cloud-logging
+
+# Database
+
+langchain-google-vertexai
+langchain-core
+asyncpg
+python-dotenv
+langgraph
+cloud-sql-python-connector[asyncpg]
+pgvector
+
+# Utilities
+
+tenacity
+websockets
+python-socketio

@@ -1,0 +1,613 @@
+/* ============================================================================
+   APP-SPECIFIC STYLES
+   Main application layout and page-level styling
+   ============================================================================ */
+
+#root {
+  max-width: 100%;
+  margin: 0 auto;
+  position: relative;
+  min-height: 100vh;
+}
+
+/* ============================================================================
+   PAGE LAYOUT & STRUCTURE
+   ============================================================================ */
+
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.app-main {
+  flex: 1;
+  padding: 2rem 0;
+  position: relative;
+}
+
+.app-content {
+  max-width: 90rem;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+/* ============================================================================
+   BACKGROUND EFFECTS
+   ============================================================================ */
+
+.bg-gradient-radial {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bg-gradient-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.15;
+  animation: float 20s ease-in-out infinite;
+}
+
+.bg-gradient-orb-1 {
+  top: 10%;
+  left: -10%;
+  width: 600px;
+  height: 600px;
+  background: linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-purple-600) 100%);
+  animation-delay: 0s;
+}
+
+.bg-gradient-orb-2 {
+  bottom: 10%;
+  right: -10%;
+  width: 500px;
+  height: 500px;
+  background: linear-gradient(135deg, var(--color-purple-500) 0%, var(--color-pink-600) 100%);
+  animation-delay: -10s;
+}
+
+.bg-gradient-orb-3 {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 400px;
+  height: 400px;
+  background: linear-gradient(135deg, var(--color-cyan-500) 0%, var(--color-blue-600) 100%);
+  animation-delay: -5s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(50px, -50px) scale(1.05);
+  }
+  50% {
+    transform: translate(-30px, 30px) scale(0.95);
+  }
+  75% {
+    transform: translate(30px, 50px) scale(1.02);
+  }
+}
+
+/* Mesh Gradient Background */
+.bg-mesh {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.1) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.1) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.1) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(6, 182, 212, 0.1) 0px, transparent 50%);
+}
+
+/* Grid Pattern */
+.bg-grid {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: 
+    linear-gradient(rgba(148, 163, 184, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+}
+
+/* ============================================================================
+   PAGE TRANSITIONS
+   ============================================================================ */
+
+.page-transition {
+  animation: fade-in-up 0.4s ease-out;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-fade {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* ============================================================================
+   SECTION SPACING
+   ============================================================================ */
+
+.section {
+  margin-bottom: 3rem;
+  animation: slide-up 0.4s ease-out;
+}
+
+.section:last-child {
+  margin-bottom: 0;
+}
+
+.section-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.section-title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(135deg, white 0%, rgba(255, 255, 255, 0.8) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.section-description {
+  font-size: 1rem;
+  color: var(--color-slate-400);
+  line-height: 1.6;
+}
+
+/* ============================================================================
+   VIEW TRANSITIONS
+   ============================================================================ */
+
+.view-enter {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+.view-enter-active {
+  opacity: 1;
+  transform: translateX(0);
+  transition: all 0.3s ease-out;
+}
+
+.view-exit {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.view-exit-active {
+  opacity: 0;
+  transform: translateX(-20px);
+  transition: all 0.3s ease-out;
+}
+
+/* ============================================================================
+   SHIMMER EFFECT
+   ============================================================================ */
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    to right,
+    rgba(15, 23, 42, 0.8) 0%,
+    rgba(30, 41, 59, 0.9) 20%,
+    rgba(51, 65, 85, 1) 40%,
+    rgba(30, 41, 59, 0.9) 60%,
+    rgba(15, 23, 42, 0.8) 100%
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite linear;
+  border-radius: 0.75rem;
+}
+
+/* ============================================================================
+   HEADER ENHANCEMENTS
+   ============================================================================ */
+
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  position: relative;
+}
+
+.header-logo-icon {
+  position: relative;
+  width: 3.5rem;
+  height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1.25rem;
+  background: linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-purple-600) 100%);
+  box-shadow: 0 8px 24px rgba(168, 85, 247, 0.4);
+  transition: all 0.3s ease;
+}
+
+.header-logo-icon::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(135deg, var(--color-blue-400) 0%, var(--color-purple-500) 100%);
+  border-radius: inherit;
+  filter: blur(12px);
+  opacity: 0.6;
+  z-index: -1;
+}
+
+.header-logo:hover .header-logo-icon {
+  transform: scale(1.05) rotate(5deg);
+  box-shadow: 0 12px 32px rgba(168, 85, 247, 0.6);
+}
+
+.header-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--color-blue-400) 0%, var(--color-purple-400) 50%, var(--color-pink-400) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
+}
+
+.header-subtitle {
+  font-size: 0.75rem;
+  color: var(--color-slate-500);
+  font-weight: 500;
+  margin-top: -0.25rem;
+}
+
+/* ============================================================================
+   NAVIGATION TABS
+   ============================================================================ */
+
+.nav-tabs {
+  display: flex;
+  gap: 0.5rem;
+  background: rgba(30, 41, 59, 0.4);
+  backdrop-filter: blur(12px);
+  padding: 0.5rem;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.nav-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.nav-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.875rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  color: var(--color-slate-400);
+  border: 1px solid transparent;
+}
+
+.nav-tab:hover {
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--color-slate-300);
+}
+
+.nav-tab.active {
+  background: linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-purple-600) 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
+  border-color: transparent;
+}
+
+.nav-tab.active:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(168, 85, 247, 0.4);
+}
+
+/* ============================================================================
+   EMPTY STATES
+   ============================================================================ */
+
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  animation: fade-in 0.5s ease-out;
+}
+
+.empty-state-icon-wrapper {
+  display: inline-flex;
+  padding: 2rem;
+  background: rgba(30, 41, 59, 0.4);
+  border-radius: 2rem;
+  margin-bottom: 2rem;
+  position: relative;
+}
+
+.empty-state-icon-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%);
+  border-radius: inherit;
+  filter: blur(12px);
+  z-index: -1;
+}
+
+.empty-state-icon {
+  width: 4rem;
+  height: 4rem;
+  color: var(--color-slate-600);
+}
+
+.empty-state-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  color: white;
+}
+
+.empty-state-description {
+  font-size: 1rem;
+  color: var(--color-slate-400);
+  max-width: 28rem;
+  margin: 0 auto 2rem;
+  line-height: 1.6;
+}
+
+/* ============================================================================
+   ACTION BARS
+   ============================================================================ */
+
+.action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  background: rgba(30, 41, 59, 0.4);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.action-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* ============================================================================
+   BREADCRUMBS
+   ============================================================================ */
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-slate-400);
+  margin-bottom: 1.5rem;
+}
+
+.breadcrumb-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: color 0.2s ease;
+}
+
+.breadcrumb-item:hover {
+  color: var(--color-slate-300);
+}
+
+.breadcrumb-separator {
+  color: var(--color-slate-600);
+}
+
+.breadcrumb-current {
+  color: white;
+  font-weight: 600;
+}
+
+/* ============================================================================
+   LOADING OVERLAYS
+   ============================================================================ */
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fade-in 0.2s ease-out;
+}
+
+.loading-spinner {
+  width: 4rem;
+  height: 4rem;
+  border: 4px solid rgba(148, 163, 184, 0.2);
+  border-top-color: var(--color-purple-500);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
+}
+
+.loading-text {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-slate-300);
+}
+
+/* ============================================================================
+   RESPONSIVE LAYOUT ADJUSTMENTS
+   ============================================================================ */
+
+@media (max-width: 1024px) {
+  .app-content {
+    padding: 0 1.5rem;
+  }
+  
+  .section {
+    margin-bottom: 2rem;
+  }
+  
+  .section-title {
+    font-size: 1.75rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-main {
+    padding: 1.5rem 0;
+  }
+  
+  .app-content {
+    padding: 0 1rem;
+  }
+  
+  .section {
+    margin-bottom: 1.5rem;
+  }
+  
+  .section-header {
+    margin-bottom: 1.5rem;
+  }
+  
+  .section-title {
+    font-size: 1.5rem;
+  }
+  
+  .action-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+  
+  .action-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .empty-state {
+    padding: 2rem 1rem;
+  }
+  
+  .empty-state-title {
+    font-size: 1.5rem;
+  }
+  
+  .header-logo-icon {
+    width: 3rem;
+    height: 3rem;
+  }
+  
+  .header-title {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .bg-gradient-orb {
+    display: none;
+  }
+  
+  .nav-tabs {
+    gap: 0.375rem;
+    padding: 0.375rem;
+  }
+  
+  .nav-tab {
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* ============================================================================
+   DARK MODE OPTIMIZATIONS (if implementing theme toggle)
+   ============================================================================ */
+
+@media (prefers-color-scheme: light) {
+  /* Light mode would be defined here if needed */
+}
+
+/* ============================================================================
+   PRINT LAYOUT
+   ============================================================================ */
+
+@media print {
+  .app-header,
+  .action-bar,
+  button,
+  .nav-tabs {
+    display: none !important;
+  }
+  
+  .app-content {
+    padding: 0;
+    max-width: 100%;
+  }
+  
+  .section {
+    page-break-inside: avoid;
+    margin-bottom: 2rem;
+  }
+  
+  body {
+    background: white;
+    color: black;
+  }
+}

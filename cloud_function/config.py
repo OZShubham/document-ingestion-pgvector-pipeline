@@ -9,11 +9,11 @@ class Config:
     PROJECT_ID: str = os.getenv('GCP_PROJECT_ID')
     REGION: str = os.getenv('GCP_REGION', 'us-central1')
     
-    # Cloud SQL
+    # Cloud SQL (Password Authentication)
     DB_INSTANCE: str = os.getenv('DB_INSTANCE')
     DB_REGION: str = os.getenv('DB_REGION', 'us-central1')
     DB_NAME: str = os.getenv('DB_NAME', 'vectordb')
-    USE_IAM_AUTH: bool = os.getenv('USE_IAM_AUTH', 'true').lower() == 'true'
+    # Note: DB_PASSWORD is read from environment variable in database_manager.py
     
     # GCS
     BUCKET_NAME: str = os.getenv('GCS_BUCKET_NAME')
@@ -84,7 +84,7 @@ class Config:
         'text/html': ['html'],
     })
 
-    # ======= NEW: Fallback Strategies =======
+    # ======= Fallback Strategies =======
     
     # When to skip Gemini and go straight to fallback
     SKIP_GEMINI_IF_PAGES_EXCEED = 1000
@@ -95,7 +95,7 @@ class Config:
     TRUNCATE_TO_PAGES = 1000             # Truncate to this many pages
     NOTIFY_ON_TRUNCATION = True          # Notify users about truncation
     
-    # ======= NEW: Performance Optimization =======
+    # ======= Performance Optimization =======
     
     # Cache settings for repeated processing
     ENABLE_PROCESSING_CACHE = True

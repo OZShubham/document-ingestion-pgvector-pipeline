@@ -2,7 +2,7 @@ import functions_framework
 import asyncio
 import threading
 import logging
-from google.cloud import logging as cloud_logging
+import google.cloud.logging as cloud_logging
  
 # Initialize Cloud Logging
 try:
@@ -48,9 +48,10 @@ async def async_process_document_upload(cloud_event):
     logger.info(f"📥 New file: gs://{bucket_name}/{file_path}")
    
     # Parse project_id from path
+    config = Config()
     path_parts = file_path.split('/')
    
-    if len(path_parts) < 3 or path_parts[0] != Config.DOCUMENTS_PREFIX:
+    if len(path_parts) < 3 or path_parts[0] != config.DOCUMENTS_PREFIX:
         logger.warning(f"⚠️  Invalid path: {file_path}")
         return {
             'error': 'Invalid file path format',
@@ -78,5 +79,20 @@ async def async_process_document_upload(cloud_event):
         return result
        
     except Exception as e:
-        logger.error(f"✗ Processing failed: {str(e)}")
-        return {'error': str(e), 'status': 'failed'}
+        error_msg = str(e)
+        
+        # Handle duplicate processing gracefully
+        if "currently being processed" in error_msg.lower():
+            logger.info(f"ℹ️ Skipping duplicate processing request for {gcs_uri}")
+            return {
+                'status': 'skipped',
+                'reason': 'Document is already being processed',
+                'gcs_uri': gcs_uri
+            }
+        
+        logger.error(f"✗ Processing failed: {error_msg}")
+        return {
+            'error': error_msg,
+            'status': 'failed',
+            'gcs_uri': gcs_uri
+        }

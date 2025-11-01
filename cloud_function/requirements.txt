@@ -1,17 +1,20 @@
-# Add these new dependencies
+
 functions-framework
 google-cloud-storage
 google-cloud-pubsub
 google-genai               
-
+google-cloud-logging
 # Database
 langchain
-langchain-google-cloud-sql-pg
+
 langchain-google-vertexai
-langchain-community
-langchain-experimental
-psycopg2-binary
-pg8000
+langchain-text-splitters
+
+
+cloud-sql-python-connector[asyncpg]
+pgvector
+langchain-core
+asyncpg
 
 # Document Processing
 pypdf                      
@@ -20,11 +23,13 @@ python-docx
 openpyxl
 
 # Text Processing
-tiktoken
+
 nltk
 
 # Utilities
-pillow
+
 tenacity                   
 httpx                     
 google-cloud-secret-manager
+
+langgraph

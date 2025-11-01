@@ -35,12 +35,16 @@ class GeminiProcessor(BaseDocumentProcessor):
     def __init__(self):
         from google import genai
         from config import Config
+        
+        # FIXED: Create Config instance
+        config = Config()
+        
         self.client = genai.Client(
             vertexai=True,
-            project=Config.PROJECT_ID,
-            location=Config.REGION
+            project=config.PROJECT_ID,
+            location=config.REGION
         )
-        self.config = Config
+        self.config = config
    
     def supports(self, mime_type: str) -> bool:
         return mime_type in self.config.GEMINI_SUPPORTED_TYPES
@@ -365,8 +369,10 @@ class DocumentProcessorFactory:
     ) -> ProcessedDocument:
         """Process document with fallback strategies"""
         from config import Config
-       
-        available_methods = Config.PROCESSING_METHODS.get(mime_type, [])
+        
+        # FIXED: Create Config instance
+        config = Config()
+        available_methods = config.PROCESSING_METHODS.get(mime_type, [])
        
         if not available_methods:
             return ProcessedDocument(

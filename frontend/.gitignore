@@ -1,6 +1,3 @@
-secrets
-credentials.json
-.env
 # Logs
 logs
 *.log
