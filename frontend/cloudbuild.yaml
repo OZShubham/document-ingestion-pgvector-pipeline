@@ -8,7 +8,7 @@ steps:
         "--build-arg", "VITE_API_URL=${_VITE_API_URL}",
         "--build-arg", "VITE_GCS_BUCKET=${_VITE_GCS_BUCKET}",
         
-        "./frontend/",
+        ".",
       ]
   
   - name: "gcr.io/cloud-builders/docker"
