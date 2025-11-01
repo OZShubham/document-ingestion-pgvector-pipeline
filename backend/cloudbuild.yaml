@@ -7,7 +7,7 @@ steps:
       - "europe-west1-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/backend:$COMMIT_SHA"
       - "-t"
       - "europe-west1-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/backend:latest"
-      - "./document-ingestion-pgvector-pipeline/frontend/"
+      - "./document-ingestion-pgvector-pipeline/backend/"
     id: "build-image"
 
   # Step 2: Push to Artifact Registry
