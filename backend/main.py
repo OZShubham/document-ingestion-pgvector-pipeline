@@ -1858,41 +1858,93 @@ async def compare_documents(
 # UPLOAD ENDPOINT
 # ============================================================================
 
-@app.post("/api/upload/signed-url")
-async def get_signed_upload_url(request: SignedUrlRequest):
-    """Generate a signed URL for direct GCS upload"""
-    try:
-        await get_project_or_404(request.project_id, request.user_id)
+# @app.post("/api/upload/signed-url")
+# async def get_signed_upload_url(request: SignedUrlRequest):
+#     """Generate a signed URL for direct GCS upload"""
+#     try:
+#         await get_project_or_404(request.project_id, request.user_id)
 
-        if not request.filename or len(request.filename) > 255:
-            raise HTTPException(status_code=400, detail="Invalid filename")
+#         if not request.filename or len(request.filename) > 255:
+#             raise HTTPException(status_code=400, detail="Invalid filename")
 
-        storage_path = f"documents/{request.project_id}/{request.filename}"
+#         storage_path = f"documents/{request.project_id}/{request.filename}"
         
+#         bucket = storage_client.bucket(Config.BUCKET_NAME)
+#         blob = bucket.blob(storage_path)
+
+#         signed_url = blob.generate_signed_url(
+#             version="v4",
+#             expiration=timedelta(minutes=15),
+#             method="PUT",
+#             content_type=request.content_type
+#         )
+
+#         gcs_uri = f"gs://{Config.BUCKET_NAME}/{storage_path}"
+
+#         logger.info(f"Generated signed URL for {request.filename}")
+        
+#         return {
+#             'signed_url': signed_url,
+#             'gcs_uri': gcs_uri,
+#             'filename': request.filename
+#         }
+
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         logger.error(f"Signed URL generation error: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/upload/direct")
+async def upload_file_direct(
+    file: UploadFile = File(...),
+    project_id: str = Form(...),
+    user_id: str = Form(...)
+):
+    """Direct file upload to GCS"""
+    try:
+        await get_project_or_404(project_id, user_id)
+
+        # Validate file
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No filename provided")
+        
+        if len(file.filename) > 255:
+            raise HTTPException(status_code=400, detail="Filename too long")
+
+        # Read file content
+        content = await file.read()
+        
+        if len(content) > Config.MAX_FILE_SIZE_MB * 1024 * 1024:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"File too large. Max size: {Config.MAX_FILE_SIZE_MB}MB"
+            )
+
+        # Upload to GCS
+        storage_path = f"documents/{project_id}/{file.filename}"
         bucket = storage_client.bucket(Config.BUCKET_NAME)
         blob = bucket.blob(storage_path)
-
-        signed_url = blob.generate_signed_url(
-            version="v4",
-            expiration=timedelta(minutes=15),
-            method="PUT",
-            content_type=request.content_type
+        
+        blob.upload_from_string(
+            content,
+            content_type=file.content_type
         )
 
         gcs_uri = f"gs://{Config.BUCKET_NAME}/{storage_path}"
 
-        logger.info(f"Generated signed URL for {request.filename}")
+        logger.info(f"Uploaded {file.filename} directly to GCS")
         
         return {
-            'signed_url': signed_url,
             'gcs_uri': gcs_uri,
-            'filename': request.filename
+            'filename': file.filename,
+            'size': len(content)
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Signed URL generation error: {e}")
+        logger.error(f"Direct upload error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
