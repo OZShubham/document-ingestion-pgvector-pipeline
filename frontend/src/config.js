@@ -75,6 +75,41 @@ export class ApiClient {
   }
 
   // Upload
+async uploadFile(file, projectId, userId, onProgress) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('project_id', projectId);
+  formData.append('user_id', userId);
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    
+    if (onProgress) {
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const progress = Math.round((e.loaded / e.total) * 100);
+          onProgress(progress);
+        }
+      });
+    }
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status === 200) {
+        resolve(JSON.parse(xhr.response));
+      } else {
+        reject(new Error(`Upload failed: ${xhr.status}`));
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      reject(new Error('Upload failed'));
+    });
+
+    xhr.open('POST', `${this.baseUrl}/upload/direct`);
+    xhr.send(formData);
+  });
+}
+  
   async getSignedUrl(filename, projectId, contentType) {
     return this.request('/upload/signed-url', {
       method: 'POST',
