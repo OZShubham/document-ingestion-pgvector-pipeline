@@ -4,10 +4,10 @@ export const config = {
   CLOUD_FUNCTION_URL: 'https://document-ingestion-pipeline-141241159430.us-central1.run.app',
   
   // Your API endpoint (create this as a separate Cloud Function)
-  API_BASE_URL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  API_BASE_URL: import.meta.env.VITE_API_URL || 'https://rag-pipeline-backend-141241159430.europe-west1.run.app/api',
   
   // GCS Bucket name
-  GCS_BUCKET: import.meta.env.VITE_GCS_BUCKET || 'your-bucket-name',
+  GCS_BUCKET: import.meta.env.VITE_GCS_BUCKET || 'ingestion-docs',
   
   // Polling interval for document updates (ms)
   POLL_INTERVAL: 5000,
