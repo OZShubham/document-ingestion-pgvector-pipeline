@@ -1233,7 +1233,7 @@ import MobileNav from './components/MobileNav';
 // CONFIGURATION
 // ============================================================================
 // const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://rag-pipeline-ui-141241159430.europe-west1.run.app/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://rag-pipeline-backend-141241159430.europe-west1.run.app/api';
 
 // ============================================================================
 // API CLIENT
