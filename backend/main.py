@@ -898,9 +898,9 @@ warnings.filterwarnings('ignore', message='.*deprecated as of June 24, 2025.*')
 # GOOGLE CLOUD CREDENTIALS
 # ============================================================================
 
-dir_path = os.path.dirname(os.path.abspath(__file__))
-credentials_path = os.path.join(dir_path, 'secrets', 'credentials.json')
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
+# dir_path = os.path.dirname(os.path.abspath(__file__))
+# credentials_path = os.path.join(dir_path, 'secrets', 'credentials.json')
+# os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
 
 # ============================================================================
 # GLOBAL INSTANCES
