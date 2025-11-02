@@ -1005,6 +1005,7 @@ allowed_origins = [
     # Add common local dev ports (frontend may run on 5174)
     "http://localhost:5174",
     "http://127.0.0.1:5174",
+    "https://rag-pipeline-ui-141241159430.europe-west1.run.app"
 ]
 
 if frontend_url := os.getenv("FRONTEND_URL"):
