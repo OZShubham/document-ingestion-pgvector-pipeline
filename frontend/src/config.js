@@ -20,6 +20,19 @@ export const config = {
   ]
 };
 
+// config.js - COMPLETE VERSION
+export const config = {
+  CLOUD_FUNCTION_URL: 'https://document-ingestion-pipeline-141241159430.us-central1.run.app',
+  API_BASE_URL: import.meta.env.VITE_API_URL || 'https://rag-pipeline-backend-141241159430.europe-west1.run.app/api',
+  GCS_BUCKET: import.meta.env.VITE_GCS_BUCKET || 'ingestion-docs',
+  POLL_INTERVAL: 5000,
+  MAX_FILE_SIZE_MB: 200,
+  ALLOWED_FILE_TYPES: [
+    '.pdf', '.docx', '.doc', '.xlsx', '.xls',
+    '.txt', '.md', '.jpg', '.jpeg', '.png', '.webp'
+  ]
+};
+
 // API Client
 export class ApiClient {
   constructor(baseUrl) {
@@ -41,7 +54,8 @@ export class ApiClient {
       const response = await fetch(url, config);
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const error = await response.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(error.error || error.detail || `HTTP error! status: ${response.status}`);
       }
       
       return await response.json();
@@ -63,94 +77,105 @@ export class ApiClient {
     });
   }
 
-  // Documents
-  async getDocuments(projectId) {
-    return this.request(`/documents?project_id=${projectId}`);
-  }
-
-  async deleteDocument(documentId, projectId) {
-    return this.request(`/documents/${documentId}?project_id=${projectId}`, {
+  async deleteProject(projectId, userId) {
+    return this.request(`/projects/${projectId}?user_id=${userId}`, {
       method: 'DELETE',
     });
   }
 
-  // Upload
-async uploadFile(file, projectId, userId, onProgress) {
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('project_id', projectId);
-  formData.append('user_id', userId);
+  async getProjectAnalytics(projectId, userId) {
+    return this.request(`/projects/${projectId}/analytics?user_id=${userId}`);
+  }
 
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    
-    if (onProgress) {
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable) {
-          const progress = Math.round((e.loaded / e.total) * 100);
-          onProgress(progress);
-        }
-      });
-    }
+  // Documents
+  async getDocuments(projectId, userId) {
+    return this.request(`/documents?project_id=${projectId}&user_id=${userId}`);
+  }
 
-    xhr.addEventListener('load', () => {
-      if (xhr.status === 200) {
-        resolve(JSON.parse(xhr.response));
-      } else {
-        reject(new Error(`Upload failed: ${xhr.status}`));
-      }
-    });
+  async getDocumentDetails(documentId, projectId, userId) {
+    return this.request(`/documents/${documentId}?project_id=${projectId}&user_id=${userId}`);
+  }
 
-    xhr.addEventListener('error', () => {
-      reject(new Error('Upload failed'));
-    });
-
-    xhr.open('POST', `${this.baseUrl}/upload/direct`);
-    xhr.send(formData);
-  });
-}
-  
-  async getSignedUrl(filename, projectId, contentType) {
-    return this.request('/upload/signed-url', {
-      method: 'POST',
-      body: JSON.stringify({ filename, project_id: projectId, content_type: contentType }),
+  async deleteDocument(documentId, projectId, userId) {
+    return this.request(`/documents/${documentId}?project_id=${projectId}&user_id=${userId}`, {
+      method: 'DELETE',
     });
   }
 
-  async uploadToGCS(signedUrl, file) {
-    const response = await fetch(signedUrl, {
-      method: 'PUT',
-      body: file,
-      headers: { 'Content-Type': file.type },
+  // Upload - DIRECT UPLOAD METHOD
+  async uploadFile(file, projectId, userId, onProgress) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('project_id', projectId);
+    formData.append('user_id', userId);
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      
+      if (onProgress) {
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const progress = Math.round((e.loaded / e.total) * 100);
+            onProgress(progress);
+          }
+        });
+      }
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status === 200) {
+          try {
+            resolve(JSON.parse(xhr.response));
+          } catch (e) {
+            resolve({ success: true });
+          }
+        } else {
+          reject(new Error(`Upload failed: ${xhr.status}`));
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        reject(new Error('Upload failed'));
+      });
+
+      xhr.open('POST', `${this.baseUrl}/upload/direct`);
+      // Don't set Content-Type header - FormData will set it automatically with boundary
+      xhr.send(formData);
     });
-
-    if (!response.ok) {
-      throw new Error('Upload failed');
-    }
-
-    return response;
   }
 
   // Search
-  async searchDocuments(query, projectId, k = 10) {
+  async searchDocuments(query, projectId, userId, k = 10) {
     return this.request('/search', {
       method: 'POST',
-      body: JSON.stringify({ query, project_id: projectId, k }),
+      body: JSON.stringify({ 
+        query, 
+        project_id: projectId, 
+        user_id: userId,
+        k 
+      }),
     });
   }
 
   // Members
-  async getProjectMembers(projectId) {
-    return this.request(`/projects/${projectId}/members`);
+  async getProjectMembers(projectId, userId) {
+    return this.request(`/projects/${projectId}/members?user_id=${userId}`);
   }
 
-  async inviteMember(projectId, email, role) {
+  async inviteMember(projectId, email, role, userId) {
     return this.request(`/projects/${projectId}/members`, {
       method: 'POST',
-      body: JSON.stringify({ email, role }),
+      body: JSON.stringify({ email, role, user_id: userId }),
+    });
+  }
+
+  async removeMember(projectId, memberUserId, userId) {
+    return this.request(`/projects/${projectId}/members/${memberUserId}?user_id=${userId}`, {
+      method: 'DELETE',
     });
   }
 }
 
 // Export singleton instance
 export const apiClient = new ApiClient(config.API_BASE_URL);
+// Export singleton instance
+
