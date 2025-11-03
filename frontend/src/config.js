@@ -1,24 +1,4 @@
-// API Configuration
-export const config = {
-  // Your Cloud Function URL
-  CLOUD_FUNCTION_URL: 'https://document-ingestion-pipeline-141241159430.us-central1.run.app',
-  
-  // Your API endpoint (create this as a separate Cloud Function)
-  API_BASE_URL: import.meta.env.VITE_API_URL || 'https://rag-pipeline-backend-141241159430.europe-west1.run.app/api',
-  
-  // GCS Bucket name
-  GCS_BUCKET: import.meta.env.VITE_GCS_BUCKET || 'ingestion-docs',
-  
-  // Polling interval for document updates (ms)
-  POLL_INTERVAL: 5000,
-  
-  // File upload settings
-  MAX_FILE_SIZE_MB: 200,
-  ALLOWED_FILE_TYPES: [
-    '.pdf', '.docx', '.doc', '.xlsx', '.xls',
-    '.txt', '.md', '.jpg', '.jpeg', '.png', '.webp'
-  ]
-};
+
 
 // config.js - COMPLETE VERSION
 export const config = {
