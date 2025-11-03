@@ -22,149 +22,151 @@ import MobileNav from './components/MobileNav';
 // const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://rag-pipeline-backend-141241159430.europe-west1.run.app/api';
 
-// ============================================================================
-// API CLIENT
-// ============================================================================
-class ApiClient {
-  constructor(baseUrl) {
-    this.baseUrl = baseUrl;
-  }
+// // ============================================================================
+// // API CLIENT
+// // ============================================================================
+// class ApiClient {
+//   constructor(baseUrl) {
+//     this.baseUrl = baseUrl;
+//   }
 
-  async request(endpoint, options = {}) {
-    const url = `${this.baseUrl}${endpoint}`;
+//   async request(endpoint, options = {}) {
+//     const url = `${this.baseUrl}${endpoint}`;
     
-    const config = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
-    };
+//     const config = {
+//       headers: {
+//         'Content-Type': 'application/json',
+//         ...options.headers,
+//       },
+//       ...options,
+//     };
 
-    try {
-      const response = await fetch(url, config);
+//     try {
+//       const response = await fetch(url, config);
       
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Request failed' }));
-        throw new Error(error.error || error.detail || `HTTP error! status: ${response.status}`);
-      }
+//       if (!response.ok) {
+//         const error = await response.json().catch(() => ({ error: 'Request failed' }));
+//         throw new Error(error.error || error.detail || `HTTP error! status: ${response.status}`);
+//       }
       
-      return await response.json();
-    } catch (error) {
-      console.error('API request failed:', error);
-      throw error;
-    }
-  }
+//       return await response.json();
+//     } catch (error) {
+//       console.error('API request failed:', error);
+//       throw error;
+//     }
+//   }
 
-  async getProjects(userId) {
-    return this.request(`/projects?user_id=${userId}`);
-  }
+//   async getProjects(userId) {
+//     return this.request(`/projects?user_id=${userId}`);
+//   }
 
-  async createProject(data) {
-    return this.request('/projects', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
+//   async createProject(data) {
+//     return this.request('/projects', {
+//       method: 'POST',
+//       body: JSON.stringify(data),
+//     });
+//   }
 
-  async deleteProject(projectId, userId) {
-    return this.request(`/projects/${projectId}?user_id=${userId}`, {
-      method: 'DELETE',
-    });
-  }
+//   async deleteProject(projectId, userId) {
+//     return this.request(`/projects/${projectId}?user_id=${userId}`, {
+//       method: 'DELETE',
+//     });
+//   }
 
-  async getDocuments(projectId, userId) {
-    return this.request(`/documents?project_id=${projectId}&user_id=${userId}`);
-  }
+//   async getDocuments(projectId, userId) {
+//     return this.request(`/documents?project_id=${projectId}&user_id=${userId}`);
+//   }
 
-  async getDocumentDetails(documentId, projectId, userId) {
-    return this.request(`/documents/${documentId}?project_id=${projectId}&user_id=${userId}`);
-  }
+//   async getDocumentDetails(documentId, projectId, userId) {
+//     return this.request(`/documents/${documentId}?project_id=${projectId}&user_id=${userId}`);
+//   }
 
-  async deleteDocument(documentId, projectId, userId) {
-    return this.request(`/documents/${documentId}?project_id=${projectId}&user_id=${userId}`, {
-      method: 'DELETE',
-    });
-  }
+//   async deleteDocument(documentId, projectId, userId) {
+//     return this.request(`/documents/${documentId}?project_id=${projectId}&user_id=${userId}`, {
+//       method: 'DELETE',
+//     });
+//   }
 
-  async getSignedUrl(filename, projectId, userId, contentType) {
-    return this.request('/upload/signed-url', {
-      method: 'POST',
-      body: JSON.stringify({ 
-        filename, 
-        project_id: projectId, 
-        user_id: userId,
-        content_type: contentType 
-      }),
-    });
-  }
+//   async getSignedUrl(filename, projectId, userId, contentType) {
+//     return this.request('/upload/signed-url', {
+//       method: 'POST',
+//       body: JSON.stringify({ 
+//         filename, 
+//         project_id: projectId, 
+//         user_id: userId,
+//         content_type: contentType 
+//       }),
+//     });
+//   }
 
-  async uploadToGCS(signedUrl, file, onProgress) {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
+//   async uploadToGCS(signedUrl, file, onProgress) {
+//     return new Promise((resolve, reject) => {
+//       const xhr = new XMLHttpRequest();
       
-      if (onProgress) {
-        xhr.upload.addEventListener('progress', (e) => {
-          if (e.lengthComputable) {
-            const progress = Math.round((e.loaded / e.total) * 100);
-            onProgress(progress);
-          }
-        });
-      }
+//       if (onProgress) {
+//         xhr.upload.addEventListener('progress', (e) => {
+//           if (e.lengthComputable) {
+//             const progress = Math.round((e.loaded / e.total) * 100);
+//             onProgress(progress);
+//           }
+//         });
+//       }
 
-      xhr.addEventListener('load', () => {
-        if (xhr.status === 200) {
-          resolve(xhr.response);
-        } else {
-          reject(new Error(`Upload failed: ${xhr.status}`));
-        }
-      });
+//       xhr.addEventListener('load', () => {
+//         if (xhr.status === 200) {
+//           resolve(xhr.response);
+//         } else {
+//           reject(new Error(`Upload failed: ${xhr.status}`));
+//         }
+//       });
 
-      xhr.addEventListener('error', () => {
-        reject(new Error('Upload failed'));
-      });
+//       xhr.addEventListener('error', () => {
+//         reject(new Error('Upload failed'));
+//       });
 
-      xhr.open('PUT', signedUrl);
-      xhr.setRequestHeader('Content-Type', file.type);
-      xhr.send(file);
-    });
-  }
+//       xhr.open('PUT', signedUrl);
+//       xhr.setRequestHeader('Content-Type', file.type);
+//       xhr.send(file);
+//     });
+//   }
 
-  async searchDocuments(query, projectId, userId, k = 10) {
-    return this.request('/search', {
-      method: 'POST',
-      body: JSON.stringify({ 
-        query, 
-        project_id: projectId, 
-        user_id: userId,
-        k 
-      }),
-    });
-  }
+//   async searchDocuments(query, projectId, userId, k = 10) {
+//     return this.request('/search', {
+//       method: 'POST',
+//       body: JSON.stringify({ 
+//         query, 
+//         project_id: projectId, 
+//         user_id: userId,
+//         k 
+//       }),
+//     });
+//   }
 
-  async getProjectMembers(projectId, userId) {
-    return this.request(`/projects/${projectId}/members?user_id=${userId}`);
-  }
+//   async getProjectMembers(projectId, userId) {
+//     return this.request(`/projects/${projectId}/members?user_id=${userId}`);
+//   }
 
-  async inviteMember(projectId, email, role, userId) {
-    return this.request(`/projects/${projectId}/members`, {
-      method: 'POST',
-      body: JSON.stringify({ email, role, user_id: userId }),
-    });
-  }
+//   async inviteMember(projectId, email, role, userId) {
+//     return this.request(`/projects/${projectId}/members`, {
+//       method: 'POST',
+//       body: JSON.stringify({ email, role, user_id: userId }),
+//     });
+//   }
 
-  async removeMember(projectId, memberUserId, userId) {
-    return this.request(`/projects/${projectId}/members/${memberUserId}?user_id=${userId}`, {
-      method: 'DELETE',
-    });
-  }
+//   async removeMember(projectId, memberUserId, userId) {
+//     return this.request(`/projects/${projectId}/members/${memberUserId}?user_id=${userId}`, {
+//       method: 'DELETE',
+//     });
+//   }
 
-  async getProjectAnalytics(projectId, userId) {
-    return this.request(`/projects/${projectId}/analytics?user_id=${userId}`);
-  }
-}
+//   async getProjectAnalytics(projectId, userId) {
+//     return this.request(`/projects/${projectId}/analytics?user_id=${userId}`);
+//   }
+// }
 
-const apiClient = new ApiClient(API_BASE_URL);
+// const apiClient = new ApiClient(API_BASE_URL);
+
+import { apiClient } from './config';
 
 // ============================================================================
 // MAIN APP COMPONENT
