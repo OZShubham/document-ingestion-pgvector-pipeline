@@ -1989,6 +1989,136 @@ Return as JSON:
 # DIRECT UPLOAD ENDPOINT
 # ============================================================================
 
+# @app.post("/api/upload/direct")
+# async def upload_file_direct(
+#     project_id: str = Form(...),
+#     user_id: str = Form(...),
+#     file: UploadFile = File(...)
+# ):
+#     """
+#     Accepts multipart/form-data uploads.
+#     If a file with the same name exists in the project, it overwrites the
+#     GCS file, deletes all old vector/chunk data, and resets the document
+#     status to 'uploaded' for reprocessing.
+#     If the file does not exist, it creates a new document record.
+#     """
+#     try:
+#         # 1. Verify access
+#         await get_project_or_404(project_id, user_id)
+
+#         if not file.filename or len(file.filename) > 255:
+#             raise HTTPException(status_code=400, detail="Invalid filename")
+
+#         # 2. Define the GCS path based on the filename (this is now correct for your logic)
+#         storage_path = f"documents/{project_id}/{file.filename}"
+#         gcs_uri = f"gs://{Config.BUCKET_NAME}/{storage_path}"
+
+#         # 3. Check if this document already exists
+#         find_query = "SELECT id FROM documents WHERE gcs_uri = $1 AND project_id = $2 AND deleted_at IS NULL"
+#         existing_doc = await db_manager.fetch_one(find_query, (gcs_uri, project_id))
+
+#         # 4. Get file size and upload to GCS (this will overwrite the existing file)
+#         try:
+#             file.file.seek(0, os.SEEK_END)
+#             size = file.file.tell()
+#             file.file.seek(0)
+            
+#             bucket = storage_client.bucket(Config.BUCKET_NAME)
+#             blob = bucket.blob(storage_path)
+#             blob.upload_from_file(file.file, content_type=file.content_type)
+#         except Exception as e:
+#             logger.error(f"GCS upload failed: {e}", exc_info=True)
+#             raise HTTPException(status_code=500, detail=f"File upload to GCS failed: {e}")
+#         finally:
+#             file.file.close() # Always close the file handle
+
+
+#         if existing_doc:
+#             # === UPDATE (OVERWRITE) PATH ===
+#             doc_id = str(existing_doc[0]) # Get the existing UUID
+#             logger.info(f"File {file.filename} exists. Overwriting and clearing old data for doc_id: {doc_id}")
+
+#             # 4a. Delete old vector data from vector store
+#             await vector_manager.delete_document_vectors(doc_id, project_id)
+
+#             # 4b. Delete old data from relational DB (chunks and logs)
+#             # We run this in a transaction for safety
+#             async with (await db_manager._get_pool()).acquire() as conn:
+#                 async with conn.transaction():
+#                     # This delete is VITAL. Your schema has UNIQUE(document_id, chunk_index).
+#                     # Without this, reprocessing would fail on a constraint violation.
+#                     await conn.execute("DELETE FROM document_chunks WHERE document_id = $1", doc_id)
+#                     await conn.execute("DELETE FROM processing_logs WHERE document_id = $1", doc_id)
+            
+#                     # 4c. Update the main document record to trigger reprocessing
+#                     update_query = """
+#                         UPDATE documents
+#                         SET 
+#                             status = 'uploaded',
+#                             file_size = $1,
+#                             file_type = $2,
+#                             uploaded_by = $3,
+#                             created_at = CURRENT_TIMESTAMP, -- Reset creation time for sorting
+#                             processed_at = NULL,
+#                             error_message = NULL,
+#                             retry_count = 0,
+#                             metadata = '{}'::jsonb -- Clear all old metadata like summaries
+#                         WHERE id = $4
+#                     """
+#                     await conn.execute(
+#                         update_query,
+#                         int(size) if size else 0,
+#                         file.content_type,
+#                         user_id,
+#                         doc_id
+#                     )
+
+#             return {
+#                 'status': 'success',
+#                 'operation': 'updated',
+#                 'document_id': doc_id,
+#                 'gcs_uri': gcs_uri,
+#                 'filename': file.filename
+#             }
+
+#         else:
+#             # === INSERT (NEW FILE) PATH ===
+#             logger.info(f"File {file.filename} is new. Creating new document record.")
+#             doc_id = str(uuid.uuid4())
+            
+#             insert_query = """
+#                 INSERT INTO documents (id, project_id, filename, file_size, file_type, status, uploaded_by, created_at, gcs_uri)
+#                 VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, $8)
+#             """
+
+#             await db_manager.execute_query(
+#                 insert_query,
+#                 (
+#                     doc_id,
+#                     project_id,
+#                     file.filename,
+#                     int(size) if size else 0,
+#                     file.content_type,
+#                     'uploaded',
+#                     user_id,
+#                     gcs_uri
+#                 )
+#             )
+
+#             return {
+#                 'status': 'success',
+#                 'operation': 'created',
+#                 'document_id': doc_id,
+#                 'gcs_uri': gcs_uri,
+#                 'filename': file.filename
+#             }
+
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         logger.error(f"Direct upload error: {e}", exc_info=True)
+#         raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/upload/direct")
 async def upload_file_direct(
     project_id: str = Form(...),
@@ -1996,11 +2126,10 @@ async def upload_file_direct(
     file: UploadFile = File(...)
 ):
     """
-    Accepts multipart/form-data uploads.
-    If a file with the same name exists in the project, it overwrites the
-    GCS file, deletes all old vector/chunk data, and resets the document
-    status to 'uploaded' for reprocessing.
-    If the file does not exist, it creates a new document record.
+    Accepts multipart/form-data uploads and stores them in GCS
+    at a STABLE path to trigger the Cloud Function.
+    
+    The Cloud Function is responsible for all database logic (upsert).
     """
     try:
         # 1. Verify access
@@ -2009,109 +2138,38 @@ async def upload_file_direct(
         if not file.filename or len(file.filename) > 255:
             raise HTTPException(status_code=400, detail="Invalid filename")
 
-        # 2. Define the GCS path based on the filename (this is now correct for your logic)
+        # 2. === THIS IS THE FIX ===
+        # Create a STABLE storage path based ONLY on project_id and filename.
+        # DO NOT add a UUID here.
         storage_path = f"documents/{project_id}/{file.filename}"
         gcs_uri = f"gs://{Config.BUCKET_NAME}/{storage_path}"
+        # === END FIX ===
 
-        # 3. Check if this document already exists
-        find_query = "SELECT id FROM documents WHERE gcs_uri = $1 AND project_id = $2 AND deleted_at IS NULL"
-        existing_doc = await db_manager.fetch_one(find_query, (gcs_uri, project_id))
-
-        # 4. Get file size and upload to GCS (this will overwrite the existing file)
+        # 3. Upload to GCS (this will overwrite any existing file at that path)
         try:
-            file.file.seek(0, os.SEEK_END)
-            size = file.file.tell()
-            file.file.seek(0)
-            
             bucket = storage_client.bucket(Config.BUCKET_NAME)
             blob = bucket.blob(storage_path)
+            
+            # Add user_id to GCS metadata so the Cloud Function can see it
+            blob.metadata = {'uploaded_by': user_id} 
+            
             blob.upload_from_file(file.file, content_type=file.content_type)
+            
         except Exception as e:
             logger.error(f"GCS upload failed: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"File upload to GCS failed: {e}")
         finally:
-            file.file.close() # Always close the file handle
+            file.file.close()
 
+        logger.info(f"Uploaded file {file.filename} to STABLE path {gcs_uri} for project {project_id}")
 
-        if existing_doc:
-            # === UPDATE (OVERWRITE) PATH ===
-            doc_id = str(existing_doc[0]) # Get the existing UUID
-            logger.info(f"File {file.filename} exists. Overwriting and clearing old data for doc_id: {doc_id}")
-
-            # 4a. Delete old vector data from vector store
-            await vector_manager.delete_document_vectors(doc_id, project_id)
-
-            # 4b. Delete old data from relational DB (chunks and logs)
-            # We run this in a transaction for safety
-            async with (await db_manager._get_pool()).acquire() as conn:
-                async with conn.transaction():
-                    # This delete is VITAL. Your schema has UNIQUE(document_id, chunk_index).
-                    # Without this, reprocessing would fail on a constraint violation.
-                    await conn.execute("DELETE FROM document_chunks WHERE document_id = $1", doc_id)
-                    await conn.execute("DELETE FROM processing_logs WHERE document_id = $1", doc_id)
-            
-                    # 4c. Update the main document record to trigger reprocessing
-                    update_query = """
-                        UPDATE documents
-                        SET 
-                            status = 'uploaded',
-                            file_size = $1,
-                            file_type = $2,
-                            uploaded_by = $3,
-                            created_at = CURRENT_TIMESTAMP, -- Reset creation time for sorting
-                            processed_at = NULL,
-                            error_message = NULL,
-                            retry_count = 0,
-                            metadata = '{}'::jsonb -- Clear all old metadata like summaries
-                        WHERE id = $4
-                    """
-                    await conn.execute(
-                        update_query,
-                        int(size) if size else 0,
-                        file.content_type,
-                        user_id,
-                        doc_id
-                    )
-
-            return {
-                'status': 'success',
-                'operation': 'updated',
-                'document_id': doc_id,
-                'gcs_uri': gcs_uri,
-                'filename': file.filename
-            }
-
-        else:
-            # === INSERT (NEW FILE) PATH ===
-            logger.info(f"File {file.filename} is new. Creating new document record.")
-            doc_id = str(uuid.uuid4())
-            
-            insert_query = """
-                INSERT INTO documents (id, project_id, filename, file_size, file_type, status, uploaded_by, created_at, gcs_uri)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, $8)
-            """
-
-            await db_manager.execute_query(
-                insert_query,
-                (
-                    doc_id,
-                    project_id,
-                    file.filename,
-                    int(size) if size else 0,
-                    file.content_type,
-                    'uploaded',
-                    user_id,
-                    gcs_uri
-                )
-            )
-
-            return {
-                'status': 'success',
-                'operation': 'created',
-                'document_id': doc_id,
-                'gcs_uri': gcs_uri,
-                'filename': file.filename
-            }
+        # 4. Return success. The Cloud Function will handle the rest.
+        return {
+            'status': 'success',
+            'operation': 'upload_triggered',
+            'gcs_uri': gcs_uri,
+            'filename': file.filename
+        }
 
     except HTTPException:
         raise
