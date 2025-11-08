@@ -2,7 +2,8 @@ import asyncpg
 import asyncio
 import logging
 import os
-from typing import Optional, List, Any
+import json
+from typing import Optional, List, Any, Dict
 from google.cloud.sql.connector import Connector
 from pgvector.asyncpg import register_vector
 from config import Config
@@ -16,6 +17,102 @@ class DatabaseManager:
     Uses password authentication only.
     Handles event loop changes in Cloud Functions.
     """
+
+    async def delete_project(self, project_id: str):
+        """
+        Soft delete a project and all its associated data.
+        This sets the deleted_at timestamp on the project, which triggers cascading soft deletes.
+        """
+        try:
+            logger.info(f"🗑️ Soft deleting project {project_id} and all associated data...")
+
+            # Mark project as deleted
+            update_project = """
+                UPDATE projects
+                SET deleted_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1 AND deleted_at IS NULL
+                RETURNING id;
+            """
+            
+            # Mark all project documents as deleted
+            update_documents = """
+                UPDATE documents
+                SET deleted_at = CURRENT_TIMESTAMP
+                WHERE project_id = $1 AND deleted_at IS NULL;
+            """
+            
+            # Execute delete operations in a transaction
+            pool = await self._get_pool()
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    # Delete project first
+                    deleted_project = await conn.fetchrow(update_project, project_id)
+                    if not deleted_project:
+                        raise ValueError(f"Project {project_id} not found or already deleted")
+                    
+                    # Delete associated documents
+                    await conn.execute(update_documents, project_id)
+
+                    # Note: Document chunks and processing logs will be filtered by the project_id
+                    # They don't need separate deletion since they reference project_id
+                    
+            logger.info(f"✅ Successfully deleted project {project_id} and all associated data")
+            return True
+
+        except asyncpg.PostgresError as e:
+            logger.error(f"❌ Database error deleting project: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"❌ Error deleting project: {e}")
+            raise
+
+    async def get_project_by_name(self, project_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a project by its name, checking only non-deleted projects.
+        """
+        try:
+            query = """
+                SELECT id, name, description, storage_path, settings, 
+                       created_at, updated_at
+                FROM projects
+                WHERE name = $1 AND deleted_at IS NULL;
+            """
+            
+            result = await self.fetch_one(query, (project_name,))
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Error getting project by name: {e}")
+            raise
+
+    async def create_project(self, name: str, description: str, storage_path: str, settings: dict = None) -> Dict[str, Any]:
+        """
+        Create a new project with uniqueness check on name.
+        Will raise an error if project name already exists.
+        """
+        try:
+            query = """
+                INSERT INTO projects (name, description, storage_path, settings)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id, name, description, storage_path, settings, 
+                          created_at, updated_at;
+            """
+            
+            result = await self.fetch_one(
+                query, 
+                (name, description, storage_path, json.dumps(settings or {}))
+            )
+            
+            logger.info(f"✨ Created new project: {result['id']} ({name})")
+            return result
+
+        except asyncpg.UniqueViolationError:
+            logger.error(f"❌ Project name '{name}' already exists")
+            raise ValueError(f"Project name '{name}' already exists")
+        except Exception as e:
+            logger.error(f"❌ Error creating project: {e}")
+            raise
 
     def __init__(self):
         # Do NOT create Connector or pool at import time
@@ -168,8 +265,78 @@ class DatabaseManager:
                 max_size=10
             )
 
+            # Run all initializations
+            await self.init_migrations()  # Run migrations first
+            await self.init_vector_extension()
+            await self.init_vector_table()
+
             logger.info(f"✅ Database pool initialized with {len(connections)} connections")
             return self._pool
+
+    async def init_migrations(self):
+        """Run database migrations"""
+        try:
+            pool = await self._get_pool()
+            async with pool.acquire() as conn:
+                # Create migrations table if it doesn't exist
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS migrations (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR(255) NOT NULL UNIQUE,
+                        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
+                
+                # Get list of applied migrations
+                applied = await conn.fetch("SELECT name FROM migrations;")
+                applied_migrations = {row['name'] for row in applied}
+                
+                # Migration: Add project name uniqueness constraint
+                if "01_add_project_name_constraint" not in applied_migrations:
+                    logger.info("🔄 Applying migration: 01_add_project_name_constraint")
+                    
+                    await conn.execute("""
+                        -- Add unique constraint on project name for non-deleted projects
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_unique_name 
+                        ON projects (name) 
+                        WHERE deleted_at IS NULL;
+
+                        -- Add trigger to enforce uniqueness only among non-deleted projects
+                        CREATE OR REPLACE FUNCTION check_project_name_uniqueness()
+                        RETURNS TRIGGER AS $$
+                        BEGIN
+                          IF EXISTS (
+                            SELECT 1 FROM projects 
+                            WHERE name = NEW.name 
+                            AND id != NEW.id 
+                            AND deleted_at IS NULL
+                          ) THEN
+                            RAISE EXCEPTION 'Project name % already exists', NEW.name;
+                          END IF;
+                          RETURN NEW;
+                        END;
+                        $$ LANGUAGE plpgsql;
+
+                        DROP TRIGGER IF EXISTS tr_project_name_uniqueness ON projects;
+                        CREATE TRIGGER tr_project_name_uniqueness
+                        BEFORE INSERT OR UPDATE ON projects
+                        FOR EACH ROW
+                        EXECUTE FUNCTION check_project_name_uniqueness();
+                    """)
+                    
+                    # Mark migration as applied
+                    await conn.execute(
+                        "INSERT INTO migrations (name) VALUES ($1)",
+                        "01_add_project_name_constraint"
+                    )
+                    
+                    logger.info("✅ Applied project name uniqueness constraint")
+                
+            logger.info("✅ All migrations completed successfully")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to run migrations: {e}")
+            raise
 
     async def init_vector_extension(self):
         """Enable pgvector extension"""

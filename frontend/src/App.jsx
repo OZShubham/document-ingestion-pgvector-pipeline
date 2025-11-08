@@ -1228,6 +1228,7 @@ import ProcessingDetail from './components/ProcessingDetail';
 import LiveStatusIndicator from './components/LiveStatusIndicator';
 import DocumentExplorer from './components/DocumentExplorer';
 import MobileNav from './components/MobileNav';
+import ProjectsList from './components/ProjectsList';
 import { apiClient } from './config';
 // ============================================================================
 // CONFIGURATION
@@ -1788,77 +1789,15 @@ const App = () => {
   <div className="max-w-7xl mx-auto px-6 py-8 relative section-gap">
         {/* Projects View */}
         {activeView === 'projects' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-3xl font-bold mb-2">Your Projects</h2>
-                <p className="text-slate-400">Create projects and collaborate with your team</p>
-              </div>
-              <button
-                onClick={() => setShowCreateProject(true)}
-                className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-lg shadow-blue-500/25"
-              >
-                <Plus className="w-5 h-5" />
-                New Project
-              </button>
-            </div>
-
-            {isLoadingProjects ? (
-              <div className="flex flex-col items-center justify-center py-20">
-                <Loader2 className="w-12 h-12 animate-spin text-blue-400 mb-4" />
-                <p className="text-slate-400">Loading projects...</p>
-              </div>
-            ) : projects.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {projects.map(project => (
-                  <div
-                    key={project.id}
-                    onClick={() => {
-                      setSelectedProject(project.id);
-                      setActiveView('pipeline');
-                    }}
-                    className="group cursor-pointer bg-slate-900/50 backdrop-blur-xl border border-slate-800/50 hover:border-slate-700 rounded-2xl p-6 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 hover:scale-[1.02]"
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="p-3 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-xl group-hover:scale-110 transition-transform">
-                        <FolderOpen className="w-6 h-6 text-blue-400" />
-                      </div>
-                      <div className="flex items-center gap-2 text-slate-400">
-                        <Users className="w-4 h-4" />
-                        <span className="text-sm">{project.members_count}</span>
-                      </div>
-                    </div>
-
-                    <h3 className="text-xl font-bold mb-2">{project.name}</h3>
-                    <p className="text-sm text-slate-400 mb-4 line-clamp-2">{project.description || 'No description'}</p>
-
-                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-800/50">
-                      <div>
-                        <p className="text-xs text-slate-500 mb-1">Documents</p>
-                        <p className="text-lg font-bold">{project.doc_count || 0}</p>
-                      </div>
-                    
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-20">
-                <div className="inline-flex p-6 bg-slate-800/30 rounded-3xl mb-6">
-                  <FolderOpen className="w-16 h-16 text-slate-600" />
-                </div>
-                <h3 className="text-2xl font-bold mb-3">No projects yet</h3>
-                <p className="text-slate-400 mb-6">Create your first project to get started with document processing</p>
-                <button
-                  onClick={() => setShowCreateProject(true)}
-                  className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-6 py-3 rounded-xl font-medium transition-all shadow-lg"
-                >
-                  <Plus className="w-5 h-5" />
-                  Create First Project
-                </button>
-              </div>
-            )}
-          </div>
+          <ProjectsList 
+            userId={user.id} 
+            apiClient={apiClient} 
+            setShowCreateProject={setShowCreateProject}
+            onSelectProject={(projectId) => {
+              setSelectedProject(projectId);
+              setActiveView('pipeline');
+            }}
+          />
         )}
 
         {/* Pipeline View */}
@@ -1925,10 +1864,10 @@ const App = () => {
                     <p className="text-xs text-slate-400 mb-1">Processing</p>
                     <p className="text-2xl font-bold text-blue-400">{analytics.processing_documents}</p>
                   </div>
-                  <div className="bg-slate-800/30 rounded-xl p-4">
+                  {/* <div className="bg-slate-800/30 rounded-xl p-4">
                     <p className="text-xs text-slate-400 mb-1">Storage</p>
                     <p className="text-2xl font-bold">{analytics.total_storage_gb} GB</p>
-                  </div>
+                  </div> */}
                 </div>
               )}
 

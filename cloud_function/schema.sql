@@ -16,6 +16,33 @@ CREATE TABLE IF NOT EXISTS projects (
     deleted_at TIMESTAMP
 );
 
+-- Add unique constraint on project name for non-deleted projects
+CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_unique_name 
+ON projects (name) 
+WHERE deleted_at IS NULL;
+
+-- Add trigger function for uniqueness check
+CREATE OR REPLACE FUNCTION check_project_name_uniqueness()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM projects 
+        WHERE name = NEW.name 
+        AND id != NEW.id 
+        AND deleted_at IS NULL
+    ) THEN
+        RAISE EXCEPTION 'Project name % already exists', NEW.name;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger
+CREATE TRIGGER tr_project_name_uniqueness
+BEFORE INSERT OR UPDATE ON projects
+FOR EACH ROW
+EXECUTE FUNCTION check_project_name_uniqueness();
+
 -- Members table
 CREATE TABLE IF NOT EXISTS members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
