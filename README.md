@@ -44,6 +44,52 @@ The repository implements a modular architecture. Important components:
 
 See `docs/ARCHITECTURE.md` (if present) or the folder READMEs for diagrams and deeper details.
 
+📁 Project Structure
+dive/
+├── backend/                    # FastAPI Backend
+│   ├── main.py                # Main API application
+│   ├── config.py              # Configuration
+│   ├── database_manager.py   # Database connection
+│   ├── vector_store_manager.py # Vector operations
+│   ├── requirements.txt       # Python dependencies
+│   ├── Dockerfile            # Container config
+│   └── .env                  # Environment variables
+│
+├── cloud-function/            # Document Processing
+│   ├── main.py               # Cloud Function entry
+│   ├── pipeline_processor.py # Processing pipeline
+│   ├── gemini_processor.py   # Gemini integration
+│   ├── document_processors.py # Document handlers
+│   ├── chunking_strategies.py # Text chunking
+│   ├── config.py             # Configuration
+│   ├── requirements.txt      # Dependencies
+│   └── .env.yaml            # Environment config
+│
+├── frontend/                  # React Frontend
+│   ├── src/
+│   │   ├── App.jsx           # Main application
+│   │   ├── config.js         # API client
+│   │   ├── components/       # React components
+│   │   │   ├── ChatInterface.jsx
+│   │   │   ├── Dashboard.jsx
+│   │   │   ├── ProcessingDetail.jsx
+│   │   │   ├── DocumentExplorer.jsx
+│   │   │   ├── LiveStatusIndicator.jsx
+│   │   │   └── MobileNav.jsx
+│   │   ├── index.css         # Global styles
+│   │   └── main.jsx          # Entry point
+│   ├── package.json          # Dependencies
+│   ├── vite.config.js        # Vite configuration
+│   ├── tailwind.config.js    # Tailwind config
+│   └── .env.local           # Environment variables
+│
+├── docs/                      # Documentation
+│   ├── API.md                # API documentation
+│   ├── DEPLOYMENT.md         # Deployment guide
+│   └── ARCHITECTURE.md       # Architecture details
+│
+└── README.md                 # This file
+
 ## Endpoints (quick reference)
 
 The backend exposes REST endpoints under `/api` and a WebSocket endpoint for real-time updates. This list is a concise reference; the running app serves full OpenAPI docs at `/docs`.
