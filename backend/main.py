@@ -2043,7 +2043,7 @@ async def upload_file_direct(
 
             # 4b. Delete old data from relational DB (chunks and logs)
             # We run this in a transaction for safety
-            async with db_manager.pool.acquire() as conn:
+            async with (await db_manager._get_pool()).acquire() as conn:
                 async with conn.transaction():
                     # This delete is VITAL. Your schema has UNIQUE(document_id, chunk_index).
                     # Without this, reprocessing would fail on a constraint violation.
