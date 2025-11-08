@@ -168,16 +168,5 @@ See `CONTRIBUTING.md` (if present). Basic workflow:
 
 This project is released under the MIT License — see `LICENSE`.
 
-## Need help extending this README?
-If you want I can:
-
-- Add a diagram in `docs/ARCHITECTURE.md` (SVG or Mermaid) reflecting the exact pipeline
-- Add CI workflows (GitHub Actions) to run tests and build+deploy
-- Produce a `deploy.sh` and Cloud Build examples that wire environment variables securely
-
-If you'd like one of those, tell me which and I'll implement it next.
-
----
-
 Built with ❤️ — Shubham Mishra
 https://github.com/OZShubham/document-ingestion-pgvector-pipeline
