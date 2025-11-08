@@ -5,38 +5,39 @@ This file contains a high-level architecture diagram for the DIVE platform. The 
 ```mermaid
 flowchart TD
   subgraph Frontend
-    A[User Browser\n(React + Vite)]
+    A[User Browser<br/>React + Vite]
   end
 
   subgraph Backend
-    B[FastAPI Backend\n(API + WebSocket)]
+    B[FastAPI Backend<br/>API + WebSocket]
   end
 
   subgraph GCP
-    C[GCS Bucket\n(documents/{project_id}/...)]
-    D[Cloud Function (Gen2)\nProcessing Pipeline]
-    E[Vertex AI / Embedding Provider]
-    F[Cloud SQL (Postgres) + pgvector]
-    G[Pub/Sub (optional)]
+    C[GCS Bucket<br/>documents/project_id/...]
+    D[Cloud Function Gen2<br/>Processing Pipeline]
+    E[Vertex AI /<br/>Embedding Provider]
+    F[Cloud SQL Postgres<br/>+ pgvector]
+    G[Pub/Sub<br/>optional]
   end
 
   A -->|HTTPS API| B
-  B -->|Write metadata / signed URLs| C
-  C -->|Object finalization event| D
-  D -->|Extraction (Gemini, PyMuPDF, pypdf, OCR, LangChain processors)| D
-  D -->|Chunking & Embeddings| E
+  B -->|Write metadata /<br/>signed URLs| C
+  C -->|Object finalization<br/>event| D
+  D -->|Extraction: Gemini<br/>PyMuPDF, pypdf<br/>OCR, LangChain| D
+  D -->|Chunking &<br/>Embeddings| E
   E -->|Embeddings| F
-  D -->|Write metadata, chunks, logs| F
+  D -->|Write metadata<br/>chunks, logs| F
   D -->|Publish events| G
-  B -->|Vector search / RAG| F
-  B -->|Real-time updates via WS| A
+  B -->|Vector search /<br/>RAG| F
+  B -->|Real-time updates<br/>via WebSocket| A
 
-  click D "./cloud_function/README.md" "Cloud Function docs"
-  click B "./backend/README.md" "Backend docs"
-  click A "./frontend/README.md" "Frontend docs"
-
-  classDef cloud fill:#f9f,stroke:#333,stroke-width:1px;
-  class C,D,E,F,G cloud;
+  classDef cloud fill:#e1f5ff,stroke:#0066cc,stroke-width:2px
+  classDef frontend fill:#fff4e6,stroke:#ff9800,stroke-width:2px
+  classDef backend fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px
+  
+  class C,D,E,F,G cloud
+  class A frontend
+  class B backend
 
   %% Notes
   %% - The pipeline uses multiple processors for extraction. Gemini (if available) is used as one option; fallbacks include PyMuPDF, pypdf, OCR, and LangChain-based processors.
