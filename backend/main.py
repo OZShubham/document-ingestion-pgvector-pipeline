@@ -1995,64 +1995,123 @@ async def upload_file_direct(
     user_id: str = Form(...),
     file: UploadFile = File(...)
 ):
-    """Accept multipart/form-data uploads from the frontend and store them in GCS.
-
-    Expects form fields: project_id, user_id and a file field named `file`.
+    """
+    Accepts multipart/form-data uploads.
+    If a file with the same name exists in the project, it overwrites the
+    GCS file, deletes all old vector/chunk data, and resets the document
+    status to 'uploaded' for reprocessing.
+    If the file does not exist, it creates a new document record.
     """
     try:
-        # Verify access
+        # 1. Verify access
         await get_project_or_404(project_id, user_id)
 
         if not file.filename or len(file.filename) > 255:
             raise HTTPException(status_code=400, detail="Invalid filename")
 
+        # 2. Define the GCS path based on the filename (this is now correct for your logic)
         storage_path = f"documents/{project_id}/{file.filename}"
-        bucket = storage_client.bucket(Config.BUCKET_NAME)
-        blob = bucket.blob(storage_path)
-
-        # Upload stream directly from the uploaded file
-        # Note: UploadFile.file is a SpooledTemporaryFile / file-like object
-        blob.upload_from_file(file.file, content_type=file.content_type)
-
         gcs_uri = f"gs://{Config.BUCKET_NAME}/{storage_path}"
 
-        # Try to determine file size (may not always be available)
+        # 3. Check if this document already exists
+        find_query = "SELECT id FROM documents WHERE gcs_uri = $1 AND project_id = $2 AND deleted_at IS NULL"
+        existing_doc = await db_manager.fetch_one(find_query, (gcs_uri, project_id))
+
+        # 4. Get file size and upload to GCS (this will overwrite the existing file)
         try:
             file.file.seek(0, os.SEEK_END)
             size = file.file.tell()
             file.file.seek(0)
-        except Exception:
-            size = None
+            
+            bucket = storage_client.bucket(Config.BUCKET_NAME)
+            blob = bucket.blob(storage_path)
+            blob.upload_from_file(file.file, content_type=file.content_type)
+        except Exception as e:
+            logger.error(f"GCS upload failed: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"File upload to GCS failed: {e}")
+        finally:
+            file.file.close() # Always close the file handle
 
-        # Insert document metadata into the database
-        doc_id = str(uuid.uuid4())
-        insert_query = """
-            INSERT INTO documents (id, project_id, filename, file_size, file_type, status, uploaded_by, created_at, gcs_uri)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, $8)
-        """
 
-        await db_manager.execute_query(
-            insert_query,
-            (
-                doc_id,
-                project_id,
-                file.filename,
-                int(size) if size else 0,
-                file.content_type,
-                'uploaded',
-                user_id,
-                gcs_uri
+        if existing_doc:
+            # === UPDATE (OVERWRITE) PATH ===
+            doc_id = str(existing_doc[0]) # Get the existing UUID
+            logger.info(f"File {file.filename} exists. Overwriting and clearing old data for doc_id: {doc_id}")
+
+            # 4a. Delete old vector data from vector store
+            await vector_manager.delete_document_vectors(doc_id, project_id)
+
+            # 4b. Delete old data from relational DB (chunks and logs)
+            # We run this in a transaction for safety
+            async with db_manager.pool.acquire() as conn:
+                async with conn.transaction():
+                    # This delete is VITAL. Your schema has UNIQUE(document_id, chunk_index).
+                    # Without this, reprocessing would fail on a constraint violation.
+                    await conn.execute("DELETE FROM document_chunks WHERE document_id = $1", doc_id)
+                    await conn.execute("DELETE FROM processing_logs WHERE document_id = $1", doc_id)
+            
+                    # 4c. Update the main document record to trigger reprocessing
+                    update_query = """
+                        UPDATE documents
+                        SET 
+                            status = 'uploaded',
+                            file_size = $1,
+                            file_type = $2,
+                            uploaded_by = $3,
+                            created_at = CURRENT_TIMESTAMP, -- Reset creation time for sorting
+                            processed_at = NULL,
+                            error_message = NULL,
+                            retry_count = 0,
+                            metadata = '{}'::jsonb -- Clear all old metadata like summaries
+                        WHERE id = $4
+                    """
+                    await conn.execute(
+                        update_query,
+                        int(size) if size else 0,
+                        file.content_type,
+                        user_id,
+                        doc_id
+                    )
+
+            return {
+                'status': 'success',
+                'operation': 'updated',
+                'document_id': doc_id,
+                'gcs_uri': gcs_uri,
+                'filename': file.filename
+            }
+
+        else:
+            # === INSERT (NEW FILE) PATH ===
+            logger.info(f"File {file.filename} is new. Creating new document record.")
+            doc_id = str(uuid.uuid4())
+            
+            insert_query = """
+                INSERT INTO documents (id, project_id, filename, file_size, file_type, status, uploaded_by, created_at, gcs_uri)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, $8)
+            """
+
+            await db_manager.execute_query(
+                insert_query,
+                (
+                    doc_id,
+                    project_id,
+                    file.filename,
+                    int(size) if size else 0,
+                    file.content_type,
+                    'uploaded',
+                    user_id,
+                    gcs_uri
+                )
             )
-        )
 
-        logger.info(f"Uploaded file {file.filename} to {gcs_uri} for project {project_id}")
-
-        return {
-            'status': 'success',
-            'document_id': doc_id,
-            'gcs_uri': gcs_uri,
-            'filename': file.filename
-        }
+            return {
+                'status': 'success',
+                'operation': 'created',
+                'document_id': doc_id,
+                'gcs_uri': gcs_uri,
+                'filename': file.filename
+            }
 
     except HTTPException:
         raise
