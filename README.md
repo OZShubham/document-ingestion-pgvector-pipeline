@@ -44,7 +44,9 @@ The repository implements a modular architecture. Important components:
 
 See `docs/ARCHITECTURE.md` (if present) or the folder READMEs for diagrams and deeper details.
 
-📁 Project Structure
+## 📁 Project Structure
+
+```
 dive/
 ├── backend/                    # FastAPI Backend
 │   ├── main.py                # Main API application
@@ -89,6 +91,9 @@ dive/
 │   └── ARCHITECTURE.md       # Architecture details
 │
 └── README.md                 # This file
+```
+
+---
 
 ## Endpoints (quick reference)
 
