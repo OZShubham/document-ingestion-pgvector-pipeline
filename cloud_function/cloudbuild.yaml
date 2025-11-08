@@ -14,7 +14,7 @@ steps:
       - '--trigger-event-filters=type=google.cloud.storage.object.v1.finalized'
       - '--trigger-event-filters=bucket=$_GCS_BUCKET_NAME'
       - '--set-secrets=DB_INSTANCE=DB_INSTANCE:latest,DB_PASSWORD=DB_PASSWORD:latest' # Reference the secrets
-      - '--set-env-vars=GCP_PROJECT_ID=$PROJECT_ID,GCP_REGION=$_REGION,DB_NAME=postgres,GCS_BUCKET_NAME=$_GCS_BUCKET_NAME,PUBSUB_TOPIC=document-processing,USE_IAM_AUTH=true'
+      - '--set-env-vars=GCP_PROJECT_ID=$PROJECT_ID,GCP_REGION=$_REGION,DB_NAME=postgres,GCS_BUCKET_NAME=$_GCS_BUCKET_NAME,PUBSUB_TOPIC=document-processing,USE_IAM_AUTH=true,API_URL=https://rag-pipeline-backend-141241159430.europe-west1.run.app'
 substitutions:
   _REGION: 'us-central1'
   _GCS_BUCKET_NAME: 'ingestion-docs'

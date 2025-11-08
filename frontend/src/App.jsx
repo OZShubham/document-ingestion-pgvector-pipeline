@@ -1557,18 +1557,17 @@ const App = () => {
         f.id === fileItem.id ? { ...f, status: 'uploading', progress: 0 } : f
       ));
 
-      const { signed_url } = await apiClient.getSignedUrl(
-        fileItem.file.name,
+      // Use direct upload endpoint on the backend
+      const result = await apiClient.uploadFile(
+        fileItem.file,
         selectedProject,
         user.id,
-        fileItem.file.type
+        (progress) => {
+          setUploadQueue(prev => prev.map(f => 
+            f.id === fileItem.id ? { ...f, progress } : f
+          ));
+        }
       );
-
-      await apiClient.uploadToGCS(signed_url, fileItem.file, (progress) => {
-        setUploadQueue(prev => prev.map(f => 
-          f.id === fileItem.id ? { ...f, progress } : f
-        ));
-      });
 
       setUploadQueue(prev => prev.map(f => 
         f.id === fileItem.id ? { ...f, status: 'processing', progress: 100 } : f
@@ -1587,6 +1586,8 @@ const App = () => {
         setUploadQueue(prev => prev.filter(f => f.id !== fileItem.id));
         loadDocuments();
       }, 3000);
+
+      return result;
 
     } catch (error) {
       console.error('Upload error:', error);

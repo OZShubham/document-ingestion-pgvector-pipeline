@@ -6,6 +6,8 @@ from typing import Dict, Any
 import logging
 import asyncio
 import traceback
+import httpx
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -521,11 +523,12 @@ class PipelineProcessor:
                 metadata = $6,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $7
+            RETURNING project_id
         """
         
         pool = await self.db_manager._get_pool()
         async with pool.acquire() as conn:
-            await conn.execute(
+            project_id = await conn.fetchval(
                 query,
                 status,
                 processing_method,
@@ -535,6 +538,20 @@ class PipelineProcessor:
                 json.dumps(metadata) if metadata else None,
                 document_id
             )
+            
+            # Send WebSocket update for status changes
+            if project_id:
+                await self.send_websocket_update(
+                    project_id=str(project_id),
+                    document_id=document_id,
+                    status=status,
+                    data={
+                        'processing_method': processing_method,
+                        'page_count': page_count,
+                        'error_message': error_message,
+                        'metadata': metadata
+                    }
+                )
    
     async def _log_stage(
         self,
@@ -564,6 +581,22 @@ class PipelineProcessor:
                 duration_ms,
                 error_details,
                 json.dumps(metadata) if metadata else None
+            )
+            
+            # Send WebSocket update for stage progress
+            stage_data = {
+                'stage': stage,
+                'status': status,
+                'duration_ms': duration_ms,
+                'error_details': error_details,
+                'metadata': metadata
+            }
+            
+            await self.send_websocket_update(
+                project_id=str(project_id),
+                document_id=document_id,
+                status=f"{stage}_{status}",
+                data=stage_data
             )
    
     async def _publish_notification(

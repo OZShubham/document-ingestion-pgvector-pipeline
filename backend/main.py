@@ -1986,6 +1986,81 @@ Return as JSON:
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
+# DIRECT UPLOAD ENDPOINT
+# ============================================================================
+
+@app.post("/api/upload/direct")
+async def upload_file_direct(
+    project_id: str = Form(...),
+    user_id: str = Form(...),
+    file: UploadFile = File(...)
+):
+    """Accept multipart/form-data uploads from the frontend and store them in GCS.
+
+    Expects form fields: project_id, user_id and a file field named `file`.
+    """
+    try:
+        # Verify access
+        await get_project_or_404(project_id, user_id)
+
+        if not file.filename or len(file.filename) > 255:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+
+        storage_path = f"documents/{project_id}/{file.filename}"
+        bucket = storage_client.bucket(Config.BUCKET_NAME)
+        blob = bucket.blob(storage_path)
+
+        # Upload stream directly from the uploaded file
+        # Note: UploadFile.file is a SpooledTemporaryFile / file-like object
+        blob.upload_from_file(file.file, content_type=file.content_type)
+
+        gcs_uri = f"gs://{Config.BUCKET_NAME}/{storage_path}"
+
+        # Try to determine file size (may not always be available)
+        try:
+            file.file.seek(0, os.SEEK_END)
+            size = file.file.tell()
+            file.file.seek(0)
+        except Exception:
+            size = None
+
+        # Insert document metadata into the database
+        doc_id = str(uuid.uuid4())
+        insert_query = """
+            INSERT INTO documents (id, project_id, filename, file_size, file_type, status, uploaded_by, created_at, gcs_uri)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, $8)
+        """
+
+        await db_manager.execute_query(
+            insert_query,
+            (
+                doc_id,
+                project_id,
+                file.filename,
+                int(size) if size else 0,
+                file.content_type,
+                'uploaded',
+                user_id,
+                gcs_uri
+            )
+        )
+
+        logger.info(f"Uploaded file {file.filename} to {gcs_uri} for project {project_id}")
+
+        return {
+            'status': 'success',
+            'document_id': doc_id,
+            'gcs_uri': gcs_uri,
+            'filename': file.filename
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Direct upload error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
 # ERROR HANDLERS
 # ============================================================================
 

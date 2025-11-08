@@ -9,6 +9,9 @@ class Config:
     PROJECT_ID: str = os.getenv('GCP_PROJECT_ID')
     REGION: str = os.getenv('GCP_REGION', 'us-central1')
     
+    # Backend API URL for websocket updates
+    API_URL: str = os.getenv('API_URL', 'https://rag-pipeline-backend-141241159430.europe-west1.run.app')  # Default to prod URL
+    
     # Cloud SQL (Password Authentication)
     DB_INSTANCE: str = os.getenv('DB_INSTANCE')
     DB_REGION: str = os.getenv('DB_REGION', 'us-central1')
