@@ -411,6 +411,51 @@ export class ApiClient {
   }
 
   // ============================================================================
+  // UPLOAD - SIGNED URL (GCS)
+  // Returns an object like { signed_url: string, gcs_uri?: string }
+  async getSignedUrl(filename, projectId, userId, contentType) {
+    return this.request('/upload/signed-url', {
+      method: 'POST',
+      body: JSON.stringify({
+        filename,
+        project_id: projectId,
+        user_id: userId,
+        content_type: contentType
+      })
+    });
+  }
+
+  // Upload a file directly to a GCS signed URL (PUT). onProgress receives 0-100.
+  async uploadToGCS(signedUrl, file, onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      if (onProgress) {
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const progress = Math.round((e.loaded / e.total) * 100);
+            onProgress(progress);
+          }
+        });
+      }
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(xhr.responseText || '{}');
+        } else {
+          reject(new Error(`Upload failed: ${xhr.status}`));
+        }
+      });
+
+      xhr.addEventListener('error', () => reject(new Error('Upload failed')));
+      xhr.open('PUT', signedUrl);
+      // Some signed URLs require no extra headers; set content-type when available.
+      if (file && file.type) xhr.setRequestHeader('Content-Type', file.type);
+      xhr.send(file);
+    });
+  }
+
+  // ============================================================================
   // SEARCH
   // ============================================================================
   async searchDocuments(query, projectId, userId, k = 10) {
