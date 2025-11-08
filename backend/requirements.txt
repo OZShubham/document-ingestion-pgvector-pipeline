@@ -5,7 +5,7 @@ pydantic[email]
 python-multipart
 
 # Google Cloud
-google-cloud-storage>=3.0.0
+google-cloud-storage
 google-cloud-secret-manager
 google-cloud-logging
 
