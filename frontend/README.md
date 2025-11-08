@@ -1,16 +1,75 @@
-# React + Vite
+# Frontend (React + Vite)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This folder contains the React single-page application (SPA) for the Document Ingestion + Vector DB pipeline. It is built with Vite and React and talks to the backend API.
 
-Currently, two official plugins are available:
+Key points:
+- Built with Vite (dev server + HMR)
+- Scripts are defined in `package.json` (dev, build, preview, lint)
+- Environment variables start with `VITE_` and are provided in `.env.example`
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Prerequisites
+- Node.js 18+ (LTS recommended)
+- npm (or yarn/pnpm)
 
-## React Compiler
+## Quick start (Windows PowerShell)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Install dependencies:
 
-## Expanding the ESLint configuration
+```powershell
+cd frontend
+npm install
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Run the dev server (hot reload):
+
+```powershell
+npm run dev
+```
+
+Open http://localhost:5173 in your browser (Vite prints the exact URL).
+
+Build for production:
+
+```powershell
+npm run build
+```
+
+Preview the production build locally:
+
+```powershell
+npm run preview
+```
+
+Linting:
+
+```powershell
+npm run lint
+```
+
+## Environment variables
+Copy `.env.example` to `.env` (or create a `.env.local`) and update values. Important variables:
+
+- `VITE_API_URL` — base URL for the backend API (e.g. `http://localhost:8000/api`)
+- `VITE_GCS_BUCKET` — (optional) GCS bucket name used by the UI for previews
+
+Example (.env or PowerShell set):
+
+```powershell
+$env:VITE_API_URL = 'http://localhost:8000/api'
+# Or create a .env file in the frontend folder
+```
+
+## Docker
+There is a `Dockerfile` in this folder to build the frontend image. Example (PowerShell):
+
+```powershell
+cd frontend
+docker build -t doc-ingest-frontend:latest .
+# Run static server (example using httpd/nginx) or use a multi-stage Dockerfile produced image
+```
+
+## Notes
+- The frontend expects the backend API to expose endpoints under `/api`.
+- If the backend runs on a different host/port, update `VITE_API_URL` before building.
+
+If you need help wiring auth or CORS settings, update the backend `main.py` CORS allow list (`FRONTEND_URL` env) so the browser can call the API.

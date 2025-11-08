@@ -38,7 +38,7 @@ const DocumentExplorer = ({ projectId, userId, apiClient, onViewDetails }) => {
     applyFiltersAndSort();
   }, [documents, filters, sortBy, sortOrder]);
 
-  const loadDocuments = async () => {
+const loadDocuments = async () => {
     try {
       setLoading(true);
       const response = await apiClient.request(
@@ -53,15 +53,16 @@ const DocumentExplorer = ({ projectId, userId, apiClient, onViewDetails }) => {
   };
 
   const loadFilterOptions = async () => {
-    try {
-      const options = await apiClient.request(
-        `/documents/filter-options?project_id=${projectId}&user_id=${userId}`
-      );
-      setFilterOptions(options);
-    } catch (error) {
-      console.error('Failed to load filter options:', error);
-    }
-  };
+  try {
+    // Use the new API client method
+    const response = await apiClient.getDocumentFilterOptions(projectId, userId);
+    setFilterOptions(response || { statuses: [], processing_methods: [], file_types: [], uploaders: [] });
+  } catch (error) {
+    console.error('Failed to load filter options:', error);
+    // Set empty options on error to prevent infinite loops
+    setFilterOptions({ statuses: [], processing_methods: [], file_types: [], uploaders: [] });
+  }
+};
 
   const applyFiltersAndSort = () => {
     let filtered = [...documents];

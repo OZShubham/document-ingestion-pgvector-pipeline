@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Activity, Wifi, WifiOff, Loader2 } from 'lucide-react';
+import { getWebSocketUrl } from '../config';
 
 const LiveStatusIndicator = ({ projectId, userId, onUpdate }) => {
   const [connected, setConnected] = useState(false);
@@ -21,43 +22,50 @@ const LiveStatusIndicator = ({ projectId, userId, onUpdate }) => {
   }, [projectId]);
 
   const connectWebSocket = () => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/ws/${projectId}`;
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    const ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-      setConnected(true);
-      setReconnecting(false);
-      ws.send(JSON.stringify({ type: 'auth', user_id: userId }));
-    };
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    try {
+      const wsUrl = getWebSocketUrl(`/api/ws/${projectId}`);
+      console.log('Connecting to WebSocket:', wsUrl);
       
-      if (data.type === 'document_update') {
-        onUpdate?.(data);
-      }
-    };
+      const ws = new WebSocket(wsUrl);
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        setConnected(true);
+        setReconnecting(false);
+        ws.send(JSON.stringify({ type: 'auth', user_id: userId }));
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'document_update') {
+          onUpdate?.(data);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setConnected(false);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setConnected(false);
+        
+        // Attempt to reconnect after 3 seconds
+        setReconnecting(true);
+        reconnectTimeoutRef.current = setTimeout(() => {
+          connectWebSocket();
+        }, 3000);
+      };
+
+      wsRef.current = ws;
+    } catch (error) {
+      console.error('WebSocket connection failed:', error);
       setConnected(false);
-    };
-
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-      setConnected(false);
-      
-      // Attempt to reconnect after 3 seconds
-      setReconnecting(true);
-      reconnectTimeoutRef.current = setTimeout(() => {
-        connectWebSocket();
-      }, 3000);
-    };
-
-    wsRef.current = ws;
+    }
   };
 
   return (

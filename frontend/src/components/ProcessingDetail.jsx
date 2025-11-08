@@ -5,6 +5,7 @@ import {
   Activity, Cpu, HardDrive, Brain, Sparkles, Tag, Hash,
   Copy, Download, Search, Filter
 } from 'lucide-react';
+import { getWebSocketUrl } from '../config';
 
 const ProcessingDetail = ({ documentId, projectId, userId, apiClient, onClose }) => {
   const [document, setDocument] = useState(null);
@@ -38,9 +39,15 @@ const ProcessingDetail = ({ documentId, projectId, userId, apiClient, onClose })
     }
   }, [activeTab, chunksPage]);
 
-  const connectWebSocket = () => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/ws/${projectId}`;
+
+
+// Update the connectWebSocket function:
+const connectWebSocket = () => {
+  if (wsRef.current?.readyState === WebSocket.OPEN) return;
+
+  try {
+    const wsUrl = getWebSocketUrl(`/api/ws/${projectId}`);
+    console.log('Connecting to WebSocket:', wsUrl);
     
     const ws = new WebSocket(wsUrl);
     
@@ -54,7 +61,7 @@ const ProcessingDetail = ({ documentId, projectId, userId, apiClient, onClose })
       
       if (data.type === 'document_update' && data.document_id === documentId) {
         setLiveUpdates(prev => [data, ...prev.slice(0, 9)]);
-        loadDocumentDetails(); // Refresh details
+        loadDocumentDetails();
       }
     };
     
@@ -67,53 +74,51 @@ const ProcessingDetail = ({ documentId, projectId, userId, apiClient, onClose })
     };
     
     wsRef.current = ws;
-  };
+  } catch (error) {
+    console.error('WebSocket connection failed:', error);
+  }
+};
 
-  const loadDocumentDetails = async () => {
-    try {
-      setLoading(true);
-      
-      // Load document
-      const docData = await apiClient.request(
-        `/documents/${documentId}?project_id=${projectId}&user_id=${userId}`
-      );
-      setDocument(docData);
-      
-      // Load timeline
-      const timelineData = await apiClient.request(
-        `/documents/${documentId}/processing-timeline?project_id=${projectId}&user_id=${userId}`
-      );
-      setTimeline(timelineData.timeline || []);
-      
-    } catch (error) {
-      console.error('Failed to load document details:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+// Update loadDocumentDetails to use the API client:
+const loadDocumentDetails = async () => {
+  try {
+    setLoading(true);
+    
+    // Load document
+    const docData = await apiClient.getDocumentDetails(documentId, projectId, userId);
+    setDocument(docData);
+    
+    // Load timeline
+    const timelineData = await apiClient.getProcessingTimeline(documentId, projectId, userId);
+    setTimeline(timelineData.timeline || []);
+    
+  } catch (error) {
+    console.error('Failed to load document details:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
-  const loadChunks = async () => {
-    try {
-      const data = await apiClient.request(
-        `/documents/${documentId}/chunks?project_id=${projectId}&user_id=${userId}&page=${chunksPage}&limit=20`
-      );
-      setChunks(data.chunks || []);
-      setChunksPagination(data.pagination);
-    } catch (error) {
-      console.error('Failed to load chunks:', error);
-    }
-  };
+// Update loadChunks:
+const loadChunks = async () => {
+  try {
+    const data = await apiClient.getDocumentChunks(documentId, projectId, userId, chunksPage, 20);
+    setChunks(data.chunks || []);
+    setChunksPagination(data.pagination);
+  } catch (error) {
+    console.error('Failed to load chunks:', error);
+  }
+};
 
-  const loadInsights = async () => {
-    try {
-      const data = await apiClient.request(
-        `/documents/${documentId}/insights?project_id=${projectId}&user_id=${userId}`
-      );
-      setInsights(data);
-    } catch (error) {
-      console.error('Failed to load insights:', error);
-    }
-  };
+// Update loadInsights:
+const loadInsights = async () => {
+  try {
+    const data = await apiClient.getDocumentInsights(documentId, projectId, userId);
+    setInsights(data);
+  } catch (error) {
+    console.error('Failed to load insights:', error);
+  }
+};
 
   const toggleChunk = (chunkId) => {
     setExpandedChunks(prev => {
@@ -257,65 +262,86 @@ const ProcessingDetail = ({ documentId, projectId, userId, apiClient, onClose })
 
           <div className="space-y-4">
             {timeline.map((stage, index) => {
-              const StageIcon = getStageIcon(stage.stage);
-              const isLast = index === timeline.length - 1;
-              
-              return (
-                <div key={index} className="relative">
-                  {!isLast && (
-                    <div className="absolute left-6 top-12 bottom-0 w-0.5 bg-slate-700/50" />
-                  )}
+            const StageIcon = getStageIcon(stage.stage);
+            const isLast = index === timeline.length - 1;
+
+            // --- ADD THIS LOGIC ---
+            // Safely parse the metadata
+            let metadataObj = {};
+            if (stage.metadata) {
+              try {
+                if (typeof stage.metadata === 'string') {
+                  metadataObj = JSON.parse(stage.metadata);
+                } else if (typeof stage.metadata === 'object' && stage.metadata !== null) {
+                  metadataObj = stage.metadata; // It's already an object
+                }
+              } catch (e) {
+                console.error("Failed to parse metadata:", stage.metadata, e);
+                // If parsing fails, metadataObj will remain empty
+              }
+            }
+            // --- END OF NEW LOGIC ---
+            
+            return (
+              <div key={index} className="relative">
+                {!isLast && (
+                  <div className="absolute left-6 top-12 bottom-0 w-0.5 bg-slate-700/50" />
+                )}
+                
+                <div className="flex gap-4">
+                  <div className={`relative z-10 p-3 rounded-xl ${getStatusColor(stage.status)}`}>
+                    <StageIcon className="w-6 h-6" />
+                  </div>
                   
-                  <div className="flex gap-4">
-                    <div className={`relative z-10 p-3 rounded-xl ${getStatusColor(stage.status)}`}>
-                      <StageIcon className="w-6 h-6" />
-                    </div>
-                    
-                    <div className="flex-1 bg-slate-800/30 rounded-xl p-4 border border-slate-700/30">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h4 className="font-bold text-lg capitalize">{stage.stage}</h4>
-                          <p className="text-sm text-slate-400">
-                            {new Date(stage.timestamp).toLocaleString()}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          {stage.duration_ms && (
-                            <span className="px-3 py-1 bg-slate-700/50 rounded-lg text-sm font-medium">
-                              {formatDuration(stage.duration_ms)}
-                            </span>
-                          )}
-                          <span className={`px-3 py-1 rounded-lg text-sm font-medium ${getStatusColor(stage.status)}`}>
-                            {stage.status}
+                  <div className="flex-1 bg-slate-800/30 rounded-xl p-4 border border-slate-700/30">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h4 className="font-bold text-lg capitalize">{stage.stage}</h4>
+                        <p className="text-sm text-slate-400">
+                          {new Date(stage.timestamp).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {stage.duration_ms && (
+                          <span className="px-3 py-1 bg-slate-700/50 rounded-lg text-sm font-medium">
+                            {formatDuration(stage.duration_ms)}
                           </span>
+                        )}
+                        <span className={`px-3 py-1 rounded-lg text-sm font-medium ${getStatusColor(stage.status)}`}>
+                          {stage.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* --- UPDATE THIS BLOCK --- */}
+                    {/* Use the new 'metadataObj' variable here */}
+                    {Object.keys(metadataObj).length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-slate-700/30">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                          {Object.entries(metadataObj).map(([key, value]) => (
+                            <div key={key} className="text-sm">
+                              <span className="text-slate-400">{key}: </span>
+                              <span className="text-slate-200 font-medium">
+                                {/* This logic is fine, it just needed a real object */}
+                                {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                              </span>
+                            </div>
+                          ))}
                         </div>
                       </div>
+                    )}
+                    {/* --- END OF UPDATED BLOCK --- */}
 
-                      {stage.metadata && Object.keys(stage.metadata).length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-slate-700/30">
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            {Object.entries(stage.metadata).map(([key, value]) => (
-                              <div key={key} className="text-sm">
-                                <span className="text-slate-400">{key}: </span>
-                                <span className="text-slate-200 font-medium">
-                                  {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {stage.error_details && (
-                        <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                          <p className="text-sm text-red-300">{stage.error_details}</p>
-                        </div>
-                      )}
-                    </div>
+                    {stage.error_details && (
+                      <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                        <p className="text-sm text-red-300">{stage.error_details}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            );
+          })}
           </div>
 
           {timeline.length === 0 && (
