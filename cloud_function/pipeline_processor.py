@@ -69,7 +69,7 @@ class PipelineProcessor:
             if file_size > self.config.MAX_FILE_SIZE_MB * 1024 * 1024:
                 raise ValueError(f"File size {file_size_mb:.1f}MB exceeds {self.config.MAX_FILE_SIZE_MB}MB limit")
             
-            # UPDATED: Smart document creation/update handling
+            # *** UPDATED: Smart document creation/update handling ***
             document_id, is_new, should_skip = await self._create_or_update_document_record(
                 project_id, filename, gcs_uri, mime_type, file_size, uploaded_by
             )
@@ -280,181 +280,133 @@ class PipelineProcessor:
         file_hash: str = None
     ) -> tuple:
         """
-        Create or update document record with smart handling
+        Implements an "Upsert" (Update/Insert) logic.
         
+        - If file is new, creates a new document record.
+        - If file exists, clears old data (chunks, vectors) and resets the 
+          document for reprocessing.
+
         Returns:
             tuple: (document_id, is_new, should_skip)
         """
         
-        # First check if document already exists
+        # Look for an existing document with this STABLE GCS_URI
         check_query = """
-            SELECT id, status, file_size, created_at, updated_at, metadata
+            SELECT id, status, file_size
             FROM documents 
-            WHERE gcs_uri = $1
-            ORDER BY created_at DESC
-            LIMIT 1
+            WHERE gcs_uri = $1 AND project_id = $2 AND deleted_at IS NULL
         """
         
         pool = await self.db_manager._get_pool()
         async with pool.acquire() as conn:
-            existing = await conn.fetchrow(check_query, gcs_uri)
+            existing = await conn.fetchrow(check_query, gcs_uri, project_id)
             
             if existing:
+                # === UPDATE (OVERWRITE) PATH ===
                 doc_id = str(existing['id'])
                 old_status = existing['status']
                 old_file_size = existing['file_size']
                 
-                logger.info(f"📋 Document exists: {doc_id} (status: {old_status})")
+                # Check if the file is *actually* different.
+                # If GCS just sends a duplicate event for a file that's already
+                # processed and the size is the same, we can skip.
+                if old_status == 'completed' and old_file_size == file_size:
+                    logger.info(f"✅ Document {doc_id} is unchanged and already completed. Skipping.")
+                    return doc_id, False, True # (doc_id, is_new=False, should_skip=True)
+
+                logger.info(f"📋 Document exists: {doc_id} (status: {old_status}). Clearing old data for reprocessing.")
+
+                # 1. Delete old vector data from vector store
+                await self.vector_manager.delete_document_vectors(doc_id, project_id)
+
+                # 2. Delete old data from relational DB (chunks and logs)
+                async with conn.transaction():
+                    await conn.execute("DELETE FROM document_chunks WHERE document_id = $1", doc_id)
+                    await conn.execute("DELETE FROM processing_logs WHERE document_id = $1", doc_id)
                 
-                # Detect if file was updated (size changed)
-                file_updated = (old_file_size != file_size)
-                
-                if file_updated:
-                    logger.info(f"🔄 File updated detected! Old size: {old_file_size}, New size: {file_size}")
-                    
-                    # Archive old version and create new record
-                    await self._archive_old_version(conn, doc_id)
-                    
-                    # Create new version
-                    new_doc_id = await self._create_new_document_version(
-                        conn, project_id, filename, gcs_uri, file_type, 
-                        file_size, uploaded_by, doc_id
+                    # 3. Update the main document record to trigger reprocessing
+                    update_query = """
+                        UPDATE documents
+                        SET 
+                            status = 'processing',
+                            file_size = $1,
+                            file_type = $2,
+                            uploaded_by = $3,
+                            created_at = CURRENT_TIMESTAMP, -- Reset creation time
+                            processed_at = NULL,
+                            error_message = NULL,
+                            retry_count = 0,
+                            metadata = '{}'::jsonb -- Clear all old metadata
+                        WHERE id = $4
+                    """
+                    await conn.execute(
+                        update_query,
+                        file_size,
+                        file_type,
+                        uploaded_by,
+                        doc_id
                     )
-                    
-                    logger.info(f"✨ Created new version: {new_doc_id} (previous: {doc_id})")
-                    return str(new_doc_id), False, False  # Not new, but updated, should process
                 
-                # File not updated - decide based on status
-                if old_status == 'completed':
-                    logger.info(f"✅ Document already processed successfully - skipping")
-                    return doc_id, False, True  # Existing doc, should skip
+                # Return (doc_id, is_new=False, should_skip=False)
+                return doc_id, False, False
+
+            else:
+                # === INSERT (NEW FILE) PATH ===
+                logger.info(f"✨ Creating new document record")
+                query = """
+                    INSERT INTO documents
+                    (project_id, filename, gcs_uri, file_type, file_size, uploaded_by, status, retry_count)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    RETURNING id
+                """
                 
-                elif old_status == 'failed':
-                    logger.info(f"♻️ Previous processing failed - retrying")
-                    await self._reset_for_reprocessing(conn, doc_id)
-                    return doc_id, False, False  # Existing doc, should process
-                
-                elif old_status == 'processing':
-                    # Check if stuck (processing for too long)
-                    updated_at = existing['updated_at']
-                    time_elapsed = datetime.now() - updated_at.replace(tzinfo=None) if updated_at.tzinfo else datetime.now() - updated_at
-                    
-                    if time_elapsed.total_seconds() > self.config.TIMEOUT_SECONDS:
-                        logger.warning(f"⏰ Document stuck in processing - retrying")
-                        await self._reset_for_reprocessing(conn, doc_id)
-                        return doc_id, False, False  # Existing doc, should process
-                    else:
-                        logger.info(f"⏳ Document currently being processed - skipping (processed {time_elapsed.total_seconds():.0f}s ago)")
-                        # Return without processing to avoid duplicates
-                        raise Exception(f"Document is currently being processed by another instance")
-                
-                else:
-                    # Unknown status - reset and retry
-                    await self._reset_for_reprocessing(conn, doc_id)
-                    return doc_id, False, False  # Existing doc, should process
-            
-            # Document doesn't exist - create new
-            logger.info(f"✨ Creating new document record")
-            query = """
-                INSERT INTO documents
-                (project_id, filename, gcs_uri, file_type, file_size, uploaded_by, status, retry_count)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING id
-            """
-            
-            document_id = await conn.fetchval(
-                query,
-                project_id, 
-                filename, 
-                gcs_uri, 
-                file_type, 
-                file_size, 
-                uploaded_by, 
-                'processing',
-                0  # retry_count
-            )
+                document_id = await conn.fetchval(
+                    query,
+                    project_id, 
+                    filename, 
+                    gcs_uri, 
+                    file_type, 
+                    file_size, 
+                    uploaded_by, 
+                    'processing',  # Set to processing, as this function *is* the processor
+                    0  # retry_count
+                )
         
-        return str(document_id), True, False  # New doc, should process
-    
-    async def _archive_old_version(self, conn, old_doc_id: str):
-        """Archive old version by marking it as superseded"""
-        query = """
-            UPDATE documents
-            SET status = 'archived',
-                metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
-                    'archived', true,
-                    'superseded_at', CURRENT_TIMESTAMP::text
-                ),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1
-        """
-        await conn.execute(query, old_doc_id)
-        logger.info(f"📦 Archived old version: {old_doc_id}")
-    
-    async def _create_new_document_version(
-        self, 
-        conn, 
-        project_id: str, 
-        filename: str, 
-        gcs_uri: str, 
-        file_type: str, 
-        file_size: int, 
-        uploaded_by: str,
-        previous_version_id: str
-    ) -> str:
-        """Create new document version"""
-        query = """
-            INSERT INTO documents
-            (project_id, filename, gcs_uri, file_type, file_size, uploaded_by, status, retry_count, metadata)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING id
-        """
-        
-        metadata = {
-            'previous_version_id': previous_version_id,
-            'version': 'updated',
-            'is_update': True
-        }
-        
-        document_id = await conn.fetchval(
-            query,
-            project_id, 
-            filename, 
-            gcs_uri, 
-            file_type, 
-            file_size, 
-            uploaded_by, 
-            'processing',
-            0,
-            json.dumps(metadata)
-        )
-        
-        return str(document_id)
+                # Return (new_doc_id, is_new=True, should_skip=False)
+                return str(document_id), True, False
     
     async def _reset_for_reprocessing(self, conn, doc_id: str):
-        """Reset document status for reprocessing"""
-        query = """
-            UPDATE documents
-            SET status = 'processing',
-                retry_count = retry_count + 1,
-                error_message = NULL,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1
-        """
-        await conn.execute(query, doc_id)
+        """Reset a 'failed' or 'stuck' document for reprocessing"""
+        logger.info(f"♻️ Resetting document {doc_id} for reprocessing.")
         
-        # Also delete old embeddings to avoid stale data
-        delete_embeddings_query = """
-            DELETE FROM document_vectors WHERE document_id = $1
-        """
-        deleted = await conn.execute(delete_embeddings_query, doc_id)
-        logger.info(f"🗑️ Deleted old embeddings for document {doc_id}: {deleted}")
+        # 1. Delete old vector data
+        # We pass None for project_id because it's not strictly needed by the
+        # vector_manager.delete_document_vectors method as long as doc_id is present.
+        await self.vector_manager.delete_document_vectors(doc_id, None) 
+
+        # 2. Delete old chunks and logs (inside a transaction)
+        async with conn.transaction():
+            await conn.execute("DELETE FROM document_chunks WHERE document_id = $1", doc_id)
+            await conn.execute("DELETE FROM processing_logs WHERE document_id = $1", doc_id)
+            
+            # 3. Reset document status
+            query = """
+                UPDATE documents
+                SET status = 'processing',
+                    retry_count = retry_count + 1,
+                    error_message = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1
+            """
+            await conn.execute(query, doc_id)
     
     # ========================================================================
     # HELPER METHODS
     # ========================================================================
-    # Add this helper function
+    # Helper function for WebSocket updates
     async def send_websocket_update(
+        self,
+        *,  # Force keyword arguments
         project_id: str,
         document_id: str,
         status: str,
@@ -462,8 +414,8 @@ class PipelineProcessor:
     ):
         """Send update via API to broadcast through WebSocket"""
         try:
-            # Get your backend API URL from environment variable
-            api_url = os.getenv('API_URL', 'http://localhost:8000')
+            # Get backend API URL from config
+            api_url = self.config.API_URL
             
             # Use a system user ID for Cloud Function calls
             async with httpx.AsyncClient() as client:
@@ -482,27 +434,27 @@ class PipelineProcessor:
                 logger.info(f"✅ Sent WebSocket update for document {document_id}")
         except Exception as e:
             logger.warning(f"⚠️ Failed to send WebSocket update: {e}")
-   
+    
     def _get_mime_type(self, filename: str) -> str:
         """Determine MIME type from filename"""
         import mimetypes
         mime_type, _ = mimetypes.guess_type(filename)
         return mime_type or 'application/octet-stream'
-   
+    
     async def _download_file(self, gcs_uri: str) -> bytes:
         """Download file from GCS"""
         def _sync_download():
             parts = gcs_uri.replace('gs://', '').split('/', 1)
             bucket_name = parts[0]
             blob_path = parts[1]
-           
+            
             bucket = self.storage_client.bucket(bucket_name)
             blob = bucket.blob(blob_path)
             return blob.download_as_bytes()
-       
+        
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _sync_download)
-   
+    
     async def _update_document_status(
         self,
         document_id: str,
@@ -552,7 +504,7 @@ class PipelineProcessor:
                         'metadata': metadata
                     }
                 )
-   
+    
     async def _log_stage(
         self,
         document_id: str,
@@ -598,7 +550,7 @@ class PipelineProcessor:
                 status=f"{stage}_{status}",
                 data=stage_data
             )
-   
+    
     async def _publish_notification(
         self,
         document_id: str,
@@ -614,7 +566,7 @@ class PipelineProcessor:
             try:
                 publisher = pubsub_v1.PublisherClient()
                 topic_path = publisher.topic_path(self.config.PROJECT_ID, self.config.PUBSUB_TOPIC)
-               
+                
                 message = {
                     'document_id': str(document_id),
                     'project_id': str(project_id),
@@ -623,7 +575,7 @@ class PipelineProcessor:
                     'error': error,
                     'metadata': metadata
                 }
-               
+                
                 future = publisher.publish(
                     topic_path,
                     json.dumps(message).encode('utf-8'),
@@ -631,11 +583,11 @@ class PipelineProcessor:
                     project_id=str(project_id),
                     status=status
                 )
-               
+                
                 return future.result(timeout=5.0)
             except Exception as e:
                 logger.warning(f"⚠️ Failed to publish notification: {e}")
                 return None
-       
+        
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, _sync_publish)
