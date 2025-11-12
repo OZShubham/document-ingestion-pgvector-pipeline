@@ -277,9 +277,12 @@ class DatabaseManager:
         self._lock = None
 
 
+
+
 class SimpleConnectionPool:
     """
     Simple connection pool for Cloud SQL Connector.
+    FIXED: Now handles stale/closed connections.
     """
 
     def __init__(self, get_connection_func, initial_connections, max_size=10):
@@ -288,6 +291,7 @@ class SimpleConnectionPool:
         self._in_use = set()
         self._max_size = max_size
         self._lock = asyncio.Lock()
+        logger.info(f"SimpleConnectionPool initialized with {len(self._available)} connections.")
 
     class _ConnectionContextManager:
         """Context manager for acquiring/releasing connections"""
@@ -308,35 +312,73 @@ class SimpleConnectionPool:
         return self._ConnectionContextManager(self)
 
     async def _acquire(self):
-        """Internal acquire method"""
+        """Internal acquire method with liveness check"""
         async with self._lock:
-            # Try to get an available connection
-            if self._available:
+            # Check available connections for a live one
+            while self._available:
                 conn = self._available.pop()
-                self._in_use.add(conn)
-                return conn
+                
+                # Check if connection is closed
+                if conn.is_closed():
+                    logger.info("♻️ Found stale (closed) connection in pool, discarding.")
+                    continue  # Try the next available connection
 
-            # Create new connection if under max_size
+                # Ping the connection to be 100% sure it's alive
+                try:
+                    await conn.fetchval("SELECT 1")
+                    logger.debug("✅ Connection from pool is alive.")
+                    self._in_use.add(conn)
+                    return conn
+                except (asyncpg.exceptions.InterfaceError, OSError) as e:
+                    logger.warning(f"♻️ Connection ping failed ('{e}'), discarding.")
+                    # Don't re-add, just let it be garbage collected
+                    continue
+            
+            # No available connections were good, create new if under max_size
             total = len(self._available) + len(self._in_use)
             if total < self._max_size:
-                conn = await self._get_connection_func()
-                self._in_use.add(conn)
-                return conn
+                logger.info("Pool empty or stale, creating new connection.")
+                try:
+                    conn = await self._get_connection_func()
+                    self._in_use.add(conn)
+                    return conn
+                except Exception as e:
+                    logger.error(f"❌ Failed to create new connection: {e}")
+                    raise
 
-        # Wait for a connection to become available
+        # If pool is full, wait for a connection to become available
+        logger.info("Pool full, waiting for a connection to be released...")
         await asyncio.sleep(0.1)
-        return await self._acquire()
+        return await self._acquire() # Retry acquire
 
     async def _release(self, conn):
-        """Internal release method"""
+        """Internal release method with liveness check"""
         async with self._lock:
-            if conn in self._in_use:
-                self._in_use.remove(conn)
+            if conn not in self._in_use:
+                # Already released or discarded
+                return
+            
+            self._in_use.remove(conn)
+
+            # Do not put closed or bad connections back in the pool
+            if conn.is_closed():
+                logger.warning("♻️ Released connection was closed, discarding.")
+                return
+
+            # If pool is full, just close this extra connection
+            if len(self._available) >= self._max_size:
+                logger.warning("Pool is full, closing released connection.")
+                try:
+                    await conn.close()
+                except Exception:
+                    pass
+            else:
                 self._available.append(conn)
 
     async def close(self):
         """Close all connections"""
         async with self._lock:
+            logger.info(f"Closing all {len(self._available)} available and {len(self._in_use)} in-use connections.")
             for conn in self._available:
                 try:
                     await conn.close()
