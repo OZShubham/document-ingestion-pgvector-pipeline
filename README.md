@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://youtu.be/su4v_cKR8oM">
-    <img src="https://img.youtube.com/vi/su4v_cKR8oM/maxresdefault.jpg" alt="Project DIVE Demo Video">
+    <img src="./docs/dive_demo_thumbnail.png" alt="DIVE Project Demo - Serverless RAG Platform Thumbnail">
   </a>
 </p>
 <p align="center">
