@@ -6,6 +6,55 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![React](https://img.shields.io/badge/react-18+-61dafb.svg)](https://reactjs.org/)
 
+## ✨ Key Features
+
+DIVE is a comprehensive, production-ready platform. Here's what sets it apart:
+
+### 🚀 **Frontend & User Experience**
+* **Modern UI:** A sleek, responsive frontend built with **React**, **Vite**, and **Tailwind CSS**.
+* **Project-Based Multi-tenancy:** Organize documents, teams, and analytics into isolated projects.
+* **Team Collaboration:** Invite and manage team members with roles (owner, admin, member).
+* **Real-time Processing:** A **WebSocket**-powered `LiveStatusIndicator` shows users the exact status of their documents as they move through the pipeline (e.g., "Processing," "Chunking").
+* **Mobile-Ready:** Fully responsive design with a dedicated mobile navigation panel (`MobileNav.jsx`).
+
+### 📈 **Analytics & Observability**
+* **Full Analytics Dashboard:** A rich, real-time dashboard (`Dashboard.jsx`) showing:
+    * Upload activity, success vs. failure rates.
+    * Distribution of file types and processing methods.
+    * Pipeline stage performance to identify bottlenecks.
+    * Top contributors, vector store statistics, and recent errors.
+* **"Glass Box" Processing View:** A detailed drill-down (`ProcessingDetail.jsx`) for *each* document showing:
+    * A step-by-step **processing timeline** (from `_log_stage`).
+    * A **chunk browser** to inspect the raw text chunks (from `getDocumentChunks`).
+    * **AI-generated insights** (summary, key topics, keywords) from the AI Insights tab.
+* **Advanced Document Explorer:** A "mission control" (`DocumentExplorer.jsx`) for all documents with:
+    * Deep filtering (by status, uploader, file type, processing method, and more).
+    * Multi-column sorting (by date, size, name, etc.).
+    * **Batch operations** (e.g., select all and "Delete" or "Export").
+
+### 🧠 **Intelligent Processing Pipeline**
+* **Smart Gemini Integration:** Leverages **Gemini** for high-accuracy text, table, and image extraction from complex documents.
+* **Resilient Fallbacks:** Intelligently routes files to the best tool. If a file is unsuitable for Gemini (e.g., >50MB), it automatically falls back to `PyMuPDF`, `pypdf`, `docx-python`, or `openpyxl`.
+* **Large File Handling:**
+    * **Size Limiting:** Pre-checks files to skip Gemini for files >50MB, saving cost and preventing errors.
+    * **PDF Truncation:** Automatically truncates PDFs with >1000 pages to the first 1000, processes them, and adds a warning.
+* **Duplicate & Update Handling:** The pipeline is idempotent:
+    * **Skips Duplicates:** If an identical, completed file is re-uploaded, it's skipped.
+    * **Handles Overwrites:** If a *new version* of a file is uploaded, DIVE automatically wipes the old vectors and chunks and re-processes the new file from scratch.
+* **Multiple Chunking Strategies:** Includes `RecursiveCharacterTextSplitter`, `SemanticChunker`, and `SentenceSplitter` (NLTK).
+
+### 💬 **Search & RAG**
+* **Semantic Search:** Fast, project-scoped vector search powered by **Vertex AI Embeddings** and **pgvector**.
+* **RAG Chat Interface:** A "Chat with your documents" UI (`ChatInterface.jsx`) that generates AI-powered answers.
+* **Verifiable Answers:** All chat answers include **source citations** with filename, page number, and similarity score.
+* **Configurable Chat:** Users can adjust the AI's creativity (temperature) and the number of sources (k) to retrieve.
+
+### 🔧 **Architecture & Deployment**
+* **Serverless & Scalable:** Built on a modern serverless stack: **GCP Cloud Run** (Backend), **GCP Cloud Function (Gen2)** (Pipeline), and **Cloud SQL** (Database).
+* **Containerized:** Fully-containerized backend and frontend with `Dockerfile`s.
+* **CI/CD Ready:** Includes `cloudbuild.yaml` files for automated deployment to GCP.
+* **Event-Driven:** Uses GCS triggers for ingestion and Pub/Sub for notifications.
+
 This repository contains three main components:
 
 - `frontend/` — React + Vite single-page app used by end users
