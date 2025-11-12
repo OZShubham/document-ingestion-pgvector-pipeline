@@ -6,6 +6,17 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![React](https://img.shields.io/badge/react-18+-61dafb.svg)](https://reactjs.org/)
 
+## 🚀 Project Demo
+
+<p align="center">
+  <a href="https://youtu.be/su4v_cKR8oM">
+    <img src="https://img.youtube.com/vi/su4v_cKR8oM/maxresdefault.jpg" alt="Project DIVE Demo Video">
+  </a>
+</p>
+<p align="center">
+  <strong>Click the thumbnail above to watch the full project demo on YouTube!</strong>
+</p>
+
 ## ✨ Key Features
 
 DIVE is a comprehensive, production-ready platform. Here's what sets it apart:
